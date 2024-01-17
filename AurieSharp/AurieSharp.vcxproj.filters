@@ -18,7 +18,7 @@
     <ClCompile Include="source\ModuleMain.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
-    <ClCompile Include="source\Script Manager\ScriptManager.cpp">
+    <ClCompile Include="source\Native\NETHost\NetHost.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,7 +35,7 @@
     <ClInclude Include="include\nethost.h">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>
-    <ClInclude Include="source\Script Manager\ScriptManager.hpp">
+    <ClInclude Include="source\Native\NETHost\NetHost.hpp">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>
   </ItemGroup>

@@ -4,7 +4,7 @@
 #include <hostfxr.h>
 #include <coreclr_delegates.h>
 
-class SharpScriptManager
+class RuntimeManager
 {
 private:
     HMODULE m_NetHost                                                               = nullptr;
@@ -30,4 +30,4 @@ public:
     void Uninitialize();
 };
 
-inline SharpScriptManager g_ScriptManager;
+inline RuntimeManager g_NetRuntime;

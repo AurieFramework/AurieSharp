@@ -1,8 +1,8 @@
-#include "ScriptManager.hpp"
+#include "NetHost.hpp"
 #include <cassert>
 using namespace Aurie;
 
-AurieStatus SharpScriptManager::Initialize(
+AurieStatus RuntimeManager::Initialize(
 	IN const char* ManagedComponentName
 )
 {
@@ -218,7 +218,7 @@ AurieStatus SharpScriptManager::Initialize(
 	return last_error == 0 ? AURIE_SUCCESS : AURIE_EXTERNAL_ERROR;
 }
 
-Aurie::AurieStatus SharpScriptManager::DispatchManagedModule(
+Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
 	IN const wchar_t* Name
 )
 {
@@ -258,7 +258,7 @@ Aurie::AurieStatus SharpScriptManager::DispatchManagedModule(
 	return aurie_framework_dispatch(g_ArSelfModule, module_entry, PpGetFrameworkRoutine);
 }
 
-void SharpScriptManager::Uninitialize()
+void RuntimeManager::Uninitialize()
 {
 	// TODO: wtf do I put here
 }

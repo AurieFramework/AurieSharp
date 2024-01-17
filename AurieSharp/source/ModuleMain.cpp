@@ -1,4 +1,4 @@
-#include "Script Manager/ScriptManager.hpp"
+#include "Native/NETHost/NetHost.hpp"
 using namespace Aurie;
 
 EXPORTED AurieStatus ModulePreinitialize(
@@ -10,18 +10,10 @@ EXPORTED AurieStatus ModulePreinitialize(
 	UNREFERENCED_PARAMETER(ModulePath);
 
 	AurieStatus last_status = AURIE_SUCCESS;
-	last_status = g_ScriptManager.Initialize("AurieSharpManaged.dll");;
 
-	// If we failed loading the assembly, no point trying to call it
-	if (!AurieSuccess(last_status))
-		return last_status;
-
-	// Call ModulePreinitialize in the managed module
-	last_status = g_ScriptManager.DispatchManagedModule(
-		L"ModulePreinitialize"
-	);
-
-	return last_status;
+	// Initializes the managed code host, and loads the AurieSharpManaged.dll file from the managed mods
+	// Returning an error code means this native module unloads.
+	return g_NetRuntime.Initialize("AurieSharpManaged.dll");
 }
 
 EXPORTED AurieStatus ModuleInitialize(
@@ -33,7 +25,7 @@ EXPORTED AurieStatus ModuleInitialize(
 	UNREFERENCED_PARAMETER(ModulePath);
 
 	// Call ModuleInitialize in the managed module
-	return g_ScriptManager.DispatchManagedModule(
+	return g_NetRuntime.DispatchManagedModule(
 		L"ModuleInitialize"
 	);
 }
@@ -46,7 +38,8 @@ EXPORTED AurieStatus ModuleUnload(
 	UNREFERENCED_PARAMETER(Module);
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	return g_ScriptManager.DispatchManagedModule(
+	// Call ModuleUnload in the managed module
+	return g_NetRuntime.DispatchManagedModule(
 		L"ModuleUnload"
 	);
 }

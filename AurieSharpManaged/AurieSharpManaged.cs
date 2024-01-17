@@ -37,12 +37,12 @@ namespace Aurie
 
 		private static AurieStatus ModuleInitialize(IAurie Aurie)
 		{
-			ISharpToolkit sharpToolkit = new ISharpToolkit(Aurie);
+			ISharpToolkit sharpToolkit = new(Aurie);
 			sharpToolkit.Print(ConsoleColor.Blue, "Print()");
             sharpToolkit.PrintInfo("PrintInfo()");
             sharpToolkit.PrintWarning("PrintWarning()");
 			sharpToolkit.PrintError("AurieSharpManaged.cs", 44, "PrintError()");
-
+			
             return AurieStatus.Success;
 		}
 	}

@@ -5,6 +5,29 @@ using Aurie;
 
 namespace SharpToolkit
 {
+	[StructLayout(LayoutKind.Explicit, Pack = 4)]
+	public struct RValue
+	{
+		// RValue union
+		[FieldOffset(0)]
+		double m_Real;
+
+		[FieldOffset(0)]
+		Int64 m_i64;
+
+		[FieldOffset(0)]
+		Int32 m_i32;
+
+		[FieldOffset(0)]
+		IntPtr m_Pointer;
+
+		[FieldOffset(8)]
+		Int32 m_Flags;
+
+		[FieldOffset(12)]
+		Int32 m_Kind;
+	}
+
 	public class ISharpToolkit
 	{
 		private IntPtr m_YYTKInterface;
@@ -109,7 +132,15 @@ namespace SharpToolkit
 			);
 		}
 
-		private delegate void PrintDelegate(
+        private delegate void CallBuiltinExDelegate(
+            IntPtr Interface,
+			ref RValue Result,
+			[MarshalAs(UnmanagedType.LPStr)] string FunctionName,
+			IntPtr SelfInstance,
+			IntPtr OtherInstance
+        );
+
+        private delegate void PrintDelegate(
 			IntPtr Interface,
 			[MarshalAs(UnmanagedType.U1)] byte Color,
 			[MarshalAs(UnmanagedType.LPStr)] string Text
@@ -190,39 +221,62 @@ namespace SharpToolkit
 			);
 		}
 
-        private delegate void PrintErrorDelegate(
+		private delegate void PrintErrorDelegate(
 			IntPtr Interface,
 			[MarshalAs(UnmanagedType.LPStr)] string Filepath,
 			int Line,
 			[MarshalAs(UnmanagedType.LPStr)] string Text
-        );
+		);
 
-        public void PrintError(
-            string Filepath,
-            int Line,
-            string Text
-        )
-        {
-            IntPtr function = IntPtr.Zero;
+		public void PrintError(
+			string Filepath,
+			int Line,
+			string Text
+		)
+		{
+			IntPtr function = IntPtr.Zero;
 
-            AurieStatus last_status = m_AurieInterface.ObpLookupInterfaceOwnerExport(
-                "YYTK_Main",
-                GetCurrentMethodName(),
-                ref function
-            );
+			AurieStatus last_status = m_AurieInterface.ObpLookupInterfaceOwnerExport(
+				"YYTK_Main",
+				GetCurrentMethodName(),
+				ref function
+			);
 
-            if (last_status != AurieStatus.Success)
-                throw new Exception("Failed to get YYTK export!");
+			if (last_status != AurieStatus.Success)
+				throw new Exception("Failed to get YYTK export!");
 
-            Marshal.GetDelegateForFunctionPointer<PrintErrorDelegate>(function)(
-                m_YYTKInterface,
-                Filepath,
+			Marshal.GetDelegateForFunctionPointer<PrintErrorDelegate>(function)(
+				m_YYTKInterface,
+				Filepath,
 				Line,
 				Text
-            );
-        }
+			);
+		}
 
-        public ISharpToolkit(IAurie AurieInterface)
+		private delegate void InvalidateAllCachesDelegate(
+			IntPtr Interface
+		);
+
+		public void InvalidateAllCaches()
+		{
+			IntPtr function = IntPtr.Zero;
+
+			AurieStatus last_status = m_AurieInterface.ObpLookupInterfaceOwnerExport(
+				"YYTK_Main",
+				GetCurrentMethodName(),
+				ref function
+			);
+
+			if (last_status != AurieStatus.Success)
+				throw new Exception("Failed to get YYTK export!");
+
+			Marshal.GetDelegateForFunctionPointer<InvalidateAllCachesDelegate>(function)(
+				m_YYTKInterface
+			);
+		}
+
+
+		public ISharpToolkit(IAurie AurieInterface)
 		{
 			m_AurieInterface = AurieInterface;
 
