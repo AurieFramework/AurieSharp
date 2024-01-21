@@ -1,6 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using AurieSharp;
+using Aurie.Managed;
+using YYTK.Managed;
 
 namespace AurieSharpManaged
 {
@@ -28,20 +29,16 @@ namespace AurieSharpManaged
 
 		private static AurieStatus ModuleInitialize()
 		{
-			bool suspended = true;
+			IYYToolkit yytk_interface = new();
 
-			short major = 0, minor = 0, patch = 0;
-            IAurie.MmGetFrameworkVersion(ref major, ref minor, ref patch);
+			yytk_interface.PrintWarning("This is from my managed module!!!1");
 
-            IAurie.ElIsProcessSuspended(ref suspended);
+			// show_debug_overlay(true)
+            yytk_interface.CallBuiltin("show_debug_overlay", new List<RValue>() { new RValue(true) });
+			
+			yytk_interface.PrintWarning("Debug overlay should be enabled!");
 
-			if (!suspended)
-			{
-                Console.Beep(1000, 1000);
-                return AurieStatus.Success;
-            }
-
-			return AurieStatus.ModuleDependencyNotResolved;
+            return AurieStatus.Success;
 		}
 	}
 }

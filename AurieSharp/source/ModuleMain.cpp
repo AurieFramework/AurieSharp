@@ -1,5 +1,4 @@
 #include "Native/NETHost/NetHost.hpp"
-#include "Managed/IAurie.hpp"
 using namespace Aurie;
 
 EXPORTED AurieStatus ModulePreinitialize(

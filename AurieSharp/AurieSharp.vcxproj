@@ -163,16 +163,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="source\Managed\IAurie.cpp" />
+    <ClCompile Include="include\YYToolkit\Shared.cpp" />
+    <ClCompile Include="source\Managed\Aurie\IAurie.cpp" />
+    <ClCompile Include="source\Managed\YYTK\IYYToolkit.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
     <ClCompile Include="source\Native\NETHost\NetHost.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Aurie\shared.hpp" />
     <ClInclude Include="include\coreclr_delegates.h" />
+    <ClInclude Include="include\FunctionWrapper\FunctionWrapper.hpp" />
     <ClInclude Include="include\hostfxr.h" />
     <ClInclude Include="include\nethost.h" />
-    <ClInclude Include="source\Managed\IAurie.hpp" />
+    <ClInclude Include="include\YYToolkit\Shared.hpp" />
+    <ClInclude Include="source\Managed\Aurie\IAurie.hpp" />
+    <ClInclude Include="source\Managed\YYTK\IYYToolkit.hpp" />
     <ClInclude Include="source\Native\NETHost\NetHost.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

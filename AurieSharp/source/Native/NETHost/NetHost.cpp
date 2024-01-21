@@ -7,13 +7,13 @@ AurieStatus RuntimeManager::Initialize(
 )
 {
 	DWORD last_error = 0;
-	m_NetHost = GetModuleHandleA("nethost-8.0.0.dll");
+	m_NetHost = GetModuleHandleA("nethost.dll");
 
 	if (!m_NetHost)
 	{
 		MessageBoxA(
 			0,
-			"NetHost-8.0.0.dll is not loaded in the current process.\n"
+			"nethost.dll is not loaded in the current process.\n"
 			"Scripts will not run, and the runtime will be unavailable!"
 			"If you haven't done so, place the nethost DLL in the \"native\" directory.",
 			"AurieSharp Script Runtime Host",
