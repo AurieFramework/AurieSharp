@@ -13,17 +13,18 @@ private:
     hostfxr_get_runtime_delegate_fn m_HostFXR_GetRuntimeDelegate					= nullptr;
     hostfxr_close_fn m_HostFXR_Close	                                            = nullptr;
     load_assembly_and_get_function_pointer_fn m_LoadAssemblyAndGetFunctionPointer   = nullptr;
-    load_assembly_fn m_LoadAssembly                                                 = nullptr;
     get_function_pointer_fn m_GetFunctionPointer                                    = nullptr;
 
     Aurie::fs::path m_ManagedModDirectory;
-    Aurie::fs::path m_HostFXRDirectory;
+    Aurie::fs::path m_NativeModDirectory;
+    Aurie::fs::path m_AurieModDirectory;
 public:
     Aurie::AurieStatus Initialize(
         IN const char* ManagedComponentName
     );
 
     Aurie::AurieStatus DispatchManagedModule(
+        IN const wchar_t* ManagedComponentName,
         IN const wchar_t* MethodName
     );
 

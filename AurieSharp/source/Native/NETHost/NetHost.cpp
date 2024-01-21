@@ -90,7 +90,8 @@ AurieStatus RuntimeManager::Initialize(
 		return last_status;
 
 	// Try to create the GAMEDIR/mods/Managed directory
-	m_HostFXRDirectory = game_root_directory / "mods" / "Native";
+	m_NativeModDirectory = game_root_directory / "mods" / "Native";
+	m_AurieModDirectory = game_root_directory / "mods" / "Aurie";
 	m_ManagedModDirectory = game_root_directory / "Mods" / "Managed";
 	try
 	{
@@ -145,7 +146,9 @@ AurieStatus RuntimeManager::Initialize(
 
 	hostfxr_handle host_context_handle;
 
-	fs::path runtime_config_path = m_HostFXRDirectory / "name.runtimeconfig.json";
+	fs::path runtime_config_path = m_AurieModDirectory / "AurieSharp.runtimeconfig.json";
+	
+	Beep(1000, 100);
 
 	// Initialize .NET Core
 	last_error = m_HostFXR_InitializeForRuntimeConfig(
@@ -154,7 +157,9 @@ AurieStatus RuntimeManager::Initialize(
 		&host_context_handle
 	);
 
-	if (last_error)
+	// 0 (Success), 1 (Success_HostAlreadyInitialized), and 2 (Success_DifferentRuntimeProperties) are success codes
+	// https://github.com/dotnet/runtime/blob/main/docs/design/features/host-error-codes.md
+	if (last_error < 0 || last_error > 2)
 	{
 		MessageBoxA(
 			0,
@@ -173,15 +178,7 @@ AurieStatus RuntimeManager::Initialize(
 		(PVOID*)(&m_LoadAssemblyAndGetFunctionPointer)
 	);
 
-	assert(last_error == 0);
-
-	last_error = m_HostFXR_GetRuntimeDelegate(
-		host_context_handle,
-		hdt_load_assembly,
-		(PVOID*)(&m_LoadAssembly)
-	);
-
-	assert(last_error == 0);
+	assert(last_error == 0 && "Failed to get hdt_load_assembly_and_get_function_pointer");
 
 	last_error = m_HostFXR_GetRuntimeDelegate(
 		host_context_handle,
@@ -189,17 +186,21 @@ AurieStatus RuntimeManager::Initialize(
 		(PVOID*)(&m_GetFunctionPointer)
 	);
 
-	assert(last_error == 0);
+	assert(last_error == 0 && "Failed to get hdt_get_function_pointer");
 
 	m_HostFXR_Close(host_context_handle);
 
 	// ASM stands for AurieSharpManaged here, not assembly language
 	fs::path managed_dll_path = m_ManagedModDirectory / ManagedComponentName;
 
-	last_error = m_LoadAssembly(
+	PVOID dummy;
+	last_error = m_LoadAssemblyAndGetFunctionPointer(
 		managed_dll_path.c_str(),
+		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
+		L"__AurieFrameworkDispatch",
+		UNMANAGEDCALLERSONLY_METHOD,
 		nullptr,
-		nullptr
+		&dummy
 	);
 
 	if (last_error)
@@ -219,34 +220,31 @@ AurieStatus RuntimeManager::Initialize(
 }
 
 Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
+	IN const wchar_t* ManagedComponentName,
 	IN const wchar_t* Name
 )
 {
 	AurieStatus(CORECLR_DELEGATE_CALLTYPE * aurie_framework_dispatch)(
-		AurieModule* Module, 
-		PVOID ManagedRoutine,
-		PVOID GetFrameworkRoutine
+		PVOID ManagedRoutine
 	) = nullptr;
 
-	AurieStatus(CORECLR_DELEGATE_CALLTYPE * module_entry)(
-		AurieModule * Self,
-		void* (*GetFrameworkRoutine)(const char* MethodName)
-		) = nullptr;
+	AurieStatus(CORECLR_DELEGATE_CALLTYPE * module_entry)() = nullptr;
 
-	m_GetFunctionPointer(
-		L"Aurie.AurieSharpManaged, AurieSharpManaged",
+	DWORD last_status = 0;
+	last_status = m_LoadAssemblyAndGetFunctionPointer(
+		(m_ManagedModDirectory / ManagedComponentName).c_str(),
+		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
 		L"__AurieFrameworkDispatch",
 		UNMANAGEDCALLERSONLY_METHOD,
-		nullptr,
 		nullptr,
 		reinterpret_cast<void**>(&aurie_framework_dispatch)
 	);
 
-	m_GetFunctionPointer(
-		L"Aurie.AurieSharpManaged, AurieSharpManaged",
+	last_status = m_LoadAssemblyAndGetFunctionPointer(
+		(m_ManagedModDirectory / ManagedComponentName).c_str(),
+		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
 		Name,
-		L"Aurie.AurieSharpManaged+AurieEntryDelegate, AurieSharpManaged",
-		nullptr,
+		L"AurieSharpManaged.AurieSharpManaged+AurieEntryDelegate, AurieSharpManaged",
 		nullptr,
 		reinterpret_cast<void**>(&module_entry)
 	);
@@ -255,7 +253,7 @@ Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
 	if (!module_entry)
 		return AURIE_SUCCESS;
 
-	return aurie_framework_dispatch(g_ArSelfModule, module_entry, PpGetFrameworkRoutine);
+	return aurie_framework_dispatch(module_entry);
 }
 
 void RuntimeManager::Uninitialize()

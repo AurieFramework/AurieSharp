@@ -1,21 +1,17 @@
-﻿using SharpToolkit;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using AurieSharp;
 
-namespace Aurie
+namespace AurieSharpManaged
 {
 	[SupportedOSPlatform("windows")]
 	public static class AurieSharpManaged
 	{
-		public delegate AurieStatus AurieEntryDelegate(IAurie Interface);
+		public delegate AurieStatus AurieEntryDelegate();
 
 		[UnmanagedCallersOnly]
 		private static AurieStatus __AurieFrameworkDispatch(
-			/* IN */ IntPtr Module,
-			/* IN */ IntPtr FunctionPointer,
-			/* IN */ IntPtr GetFrameworkRoutine
+			/* IN */ IntPtr FunctionPointer
 		)
 		{
 			if (FunctionPointer != IntPtr.Zero) 
@@ -24,26 +20,28 @@ namespace Aurie
 					FunctionPointer
 				);
 
-				return entry(new IAurie(GetFrameworkRoutine));
+				return entry();
 			}
-			
+
 			return AurieStatus.Success;
 		}
 
-		private static AurieStatus ModulePreinitialize(IAurie Aurie)
+		private static AurieStatus ModuleInitialize()
 		{
-			return AurieStatus.Success;
-		}
+			bool suspended = true;
 
-		private static AurieStatus ModuleInitialize(IAurie Aurie)
-		{
-			ISharpToolkit sharpToolkit = new(Aurie);
-			sharpToolkit.Print(ConsoleColor.Blue, "Print()");
-            sharpToolkit.PrintInfo("PrintInfo()");
-            sharpToolkit.PrintWarning("PrintWarning()");
-			sharpToolkit.PrintError("AurieSharpManaged.cs", 44, "PrintError()");
-			
-            return AurieStatus.Success;
+			short major = 0, minor = 0, patch = 0;
+            AurieInterface.MmGetFrameworkVersion(ref major, ref minor, ref patch);
+
+			AurieInterface.ElIsProcessSuspended(ref suspended);
+
+			if (!suspended)
+			{
+                Console.Beep(1000, 1000);
+                return AurieStatus.Success;
+            }
+
+			return AurieStatus.ModuleDependencyNotResolved;
 		}
 	}
 }

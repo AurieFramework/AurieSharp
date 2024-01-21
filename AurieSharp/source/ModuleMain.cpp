@@ -1,4 +1,5 @@
 #include "Native/NETHost/NetHost.hpp"
+#include "Managed/IAurie.hpp"
 using namespace Aurie;
 
 EXPORTED AurieStatus ModulePreinitialize(
@@ -8,8 +9,6 @@ EXPORTED AurieStatus ModulePreinitialize(
 {
 	UNREFERENCED_PARAMETER(Module);
 	UNREFERENCED_PARAMETER(ModulePath);
-
-	AurieStatus last_status = AURIE_SUCCESS;
 
 	// Initializes the managed code host, and loads the AurieSharpManaged.dll file from the managed mods
 	// Returning an error code means this native module unloads.
@@ -26,6 +25,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 	// Call ModuleInitialize in the managed module
 	return g_NetRuntime.DispatchManagedModule(
+		L"AurieSharpManaged.dll",
 		L"ModuleInitialize"
 	);
 }
@@ -40,6 +40,7 @@ EXPORTED AurieStatus ModuleUnload(
 
 	// Call ModuleUnload in the managed module
 	return g_NetRuntime.DispatchManagedModule(
+		L"AurieSharpManaged.dll",
 		L"ModuleUnload"
 	);
 }
