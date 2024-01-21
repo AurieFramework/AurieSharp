@@ -3,18 +3,15 @@ using Marshal = System::Runtime::InteropServices::Marshal;
 
 namespace AurieSharp
 {
-	AurieStatus AurieInterface::ElIsProcessSuspended(
+	AurieStatus IAurie::ElIsProcessSuspended(
 		OUT bool% Suspended
 	)
 	{
-		printf("ElProcessSuspended called!!!");
-		Beep(1000, 100);
-
 		pin_ptr<bool> suspended = &Suspended;
 		return static_cast<AurieStatus>(Aurie::ElIsProcessSuspended(*suspended));
 	}
 
-	void AurieInterface::MmGetFrameworkVersion(
+	void IAurie::MmGetFrameworkVersion(
 		OUT short% Major,
 		OUT short% Minor,
 		OUT short% Patch
@@ -31,7 +28,7 @@ namespace AurieSharp
 		);
 	}
 
-	System::UIntPtr AurieInterface::MmSigscanModule(
+	System::UIntPtr IAurie::MmSigscanModule(
 		IN System::String^ ModuleName,
 		IN System::String^ Pattern,
 		IN System::String^ PatternMask
@@ -56,7 +53,7 @@ namespace AurieSharp
 		return System::UIntPtr(result);
 	}
 
-	System::UIntPtr AurieInterface::MmSigscanRegion(
+	System::UIntPtr IAurie::MmSigscanRegion(
 		IN System::UIntPtr RegionBase,
 		IN int RegionSize,
 		IN System::String^ Pattern,

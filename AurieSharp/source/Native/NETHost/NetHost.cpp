@@ -148,8 +148,6 @@ AurieStatus RuntimeManager::Initialize(
 
 	fs::path runtime_config_path = m_AurieModDirectory / "AurieSharp.runtimeconfig.json";
 	
-	Beep(1000, 100);
-
 	// Initialize .NET Core
 	last_error = m_HostFXR_InitializeForRuntimeConfig(
 		runtime_config_path.native().c_str(),

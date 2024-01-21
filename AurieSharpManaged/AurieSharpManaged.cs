@@ -31,9 +31,9 @@ namespace AurieSharpManaged
 			bool suspended = true;
 
 			short major = 0, minor = 0, patch = 0;
-            AurieInterface.MmGetFrameworkVersion(ref major, ref minor, ref patch);
+            IAurie.MmGetFrameworkVersion(ref major, ref minor, ref patch);
 
-			AurieInterface.ElIsProcessSuspended(ref suspended);
+            IAurie.ElIsProcessSuspended(ref suspended);
 
 			if (!suspended)
 			{

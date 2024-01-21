@@ -40,7 +40,7 @@ namespace AurieSharp
 		Unavailable
 	};
 
-	public ref class AurieInterface
+	public ref class IAurie
 	{
 	public:
 		static AurieStatus ElIsProcessSuspended(
