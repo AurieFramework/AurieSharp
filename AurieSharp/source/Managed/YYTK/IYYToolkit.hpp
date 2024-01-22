@@ -9,6 +9,7 @@ namespace YYTK
 		using namespace System::Runtime::InteropServices;
 		using namespace System::Collections::Generic;
 
+
 		public enum class RValueType : uint32_t
 		{
 			VALUE_REAL = 0,				// Real value
@@ -30,35 +31,114 @@ namespace YYTK
 			VALUE_UNSET = 0x0ffffff		// Unset value (never initialized)
 		};
 
+		public enum class EventTriggers : uint32_t
+		{
+			EVENT_OBJECT_CALL = 1,	// The event represents a Code_Execute() call.
+			EVENT_FRAME = 2,		// The event represents an IDXGISwapChain::Present() call.
+			EVENT_RESIZE = 3,		// The event represents an IDXGISwapChain::ResizeBuffers() call.
+			EVENT_SCRIPT_CALL = 4,	// The event represents a DoCallScript() call.
+			EVENT_WNDPROC = 5		// The event represents a WndProc() call.
+		};
+
+		public delegate void CallbackDelegate(System::UIntPtr Context);
+
 		public ref class RValue
 		{
 		public:
-			[StructLayout(LayoutKind::Explicit, Pack = 4)]
-			value class RValueData
-			{
-			public:
-				[FieldOffset(0)] int32_t m_i32;
-				[FieldOffset(0)] int64_t m_i64;
-				[FieldOffset(0)] double m_Real;
-				[FieldOffset(0)] PVOID m_Pointer;
-			} m_Data;
+			YYTK::RValue* m_UnmanagedRValue = nullptr;
 
-			uint32_t m_Flags;
-			RValueType m_Kind;
+			RValue();
 
-			RValue()
-			{
-				this->m_Data.m_i64 = 0;
-				this->m_Kind = RValueType::VALUE_UNDEFINED;
-				this->m_Flags = 0;
-			}
+			RValue(bool Value);
 
-			RValue(bool Value)
-			{
-				this->m_Data.m_i32 = Value;
-				this->m_Flags = 0;
-				this->m_Kind = RValueType::VALUE_BOOL;
-			}
+			RValue(int32_t Value);
+
+			RValue(int64_t Value);
+
+			RValue(double Value);
+
+			RValue(System::String^ Value);
+
+			~RValue();
+
+			double AsReal();
+
+			int32_t AsInt32();
+
+			int64_t AsInt64();
+
+			bool AsBool();
+
+			System::String^ AsString();
+
+			bool IsUndefined();
+
+			bool IsInstance();
+
+			RValue^ GetMember(System::String^ MemberName);
+
+			RValueType GetKind();
+		};
+
+		public ref class CInstance
+		{
+		public:
+			YYTK::CInstance* m_UnmanagedInstance = nullptr;
+		
+			CInstance(System::UIntPtr InstancePointer);
+
+			RValue^ GetMember(System::String^ MemberName);
+		};
+
+		public ref class CCode
+		{
+		public:
+			YYTK::CCode* m_UnmanagedCode = nullptr;
+
+			CCode(System::UIntPtr ObjectPointer);
+
+			System::String^ GetName();
+		};
+
+		// Wraps FWCodeEvent&
+		public ref class FWCodeEvent
+		{
+		private:
+			YYTK::FWCodeEvent* m_NativeEvent = nullptr;
+		public:
+			FWCodeEvent(System::UIntPtr Object);
+
+			bool CalledOriginal();
+
+			bool Call();
+
+			CInstance^ GetSelfInstance();
+
+			CInstance^ GetOtherInstance();
+
+			CCode^ GetCodeObject();
+
+			int GetArgumentCount();
+
+			List<RValue^>^ GetArgumentArray();
+		};
+
+		public ref class FWFrame
+		{
+		private:
+			YYTK::FWFrame* m_NativeEvent = nullptr;
+		public:
+			FWFrame(System::UIntPtr Object);
+
+			bool CalledOriginal();
+
+			HRESULT Call();
+
+			System::UIntPtr GetSwapchainPointer();
+
+			uint32_t GetSyncInterval();
+
+			uint32_t GetFlags();
 		};
 
 		public ref class IYYToolkit : public Aurie::Managed::AurieInterfaceBase
@@ -79,7 +159,7 @@ namespace YYTK
 			);
 
 			Aurie::Managed::AurieStatus GetGlobalInstance(
-				[Out] System::UIntPtr% FunctionPointer
+				[Out] CInstance% Instance
 			);
 
 			RValue^ CallBuiltin(
@@ -105,28 +185,42 @@ namespace YYTK
 				[In] int Line,
 				[In] System::String^ Text
 			);
+
+			Aurie::Managed::AurieStatus CreateCallback(
+				[In] EventTriggers Trigger,
+				[In] CallbackDelegate^ Delegate,
+				[In] int32_t Priority
+			);
 		};
 
 		inline YYTK::RValue ManagedToUnmanagedRValue(YYTK::Managed::RValue^ Value)
 		{
-			YYTK::RValue unmanaged_rvalue;
-
-			// This copies the whole 8 bytes without the IEEE bullshit of doubles
-			unmanaged_rvalue.m_i64 = Value->m_Data.m_i64;
-			unmanaged_rvalue.m_Kind = static_cast<YYTK::RValueType>(Value->m_Kind);
-			unmanaged_rvalue.m_Flags = Value->m_Flags;
-
-			return unmanaged_rvalue;
+			return *Value->m_UnmanagedRValue;
 		}
 
-		inline YYTK::Managed::RValue^ UnmanagedToManagedRValue(YYTK::RValue Value)
+		inline YYTK::Managed::RValue^ UnmanagedToManagedRValue(YYTK::RValue Value)	
 		{
+			// Instantiate the new RValue
 			YYTK::Managed::RValue^ managed_rvalue = gcnew RValue();
 
-			// This copies the whole 8 bytes without the IEEE bullshit of doubles
-			managed_rvalue->m_Data.m_i64 = Value.m_i64;
-			managed_rvalue->m_Kind = static_cast<YYTK::Managed::RValueType>(Value.m_Kind);
-			managed_rvalue->m_Flags = Value.m_Flags;
+			*managed_rvalue->m_UnmanagedRValue = Value;
+
+			return managed_rvalue;
+		}
+
+		inline YYTK::Managed::RValue^ UnmanagedToManagedRValue(YYTK::RValue& Value, bool Copy)
+		{
+			// Instantiate the new RValue
+			YYTK::Managed::RValue^ managed_rvalue = gcnew RValue();
+
+			if (Copy)
+			{
+				*managed_rvalue->m_UnmanagedRValue = Value;
+			}
+			else
+			{
+				managed_rvalue->m_UnmanagedRValue = &Value;
+			}
 
 			return managed_rvalue;
 		}

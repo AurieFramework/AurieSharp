@@ -242,14 +242,14 @@ Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
 		(m_ManagedModDirectory / ManagedComponentName).c_str(),
 		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
 		Name,
-		L"AurieSharpManaged.AurieSharpManaged+AurieEntryDelegate, AurieSharpManaged",
+		L"Aurie.Managed.AurieEntryDelegate, AurieSharp",
 		nullptr,
 		reinterpret_cast<void**>(&module_entry)
 	);
 
-	// If no such entry exists, assume it succeeded
-	if (!module_entry)
-		return AURIE_SUCCESS;
+	// AurieFrameworkDispatch ignores nullptr things
+	if (!aurie_framework_dispatch)
+		return AURIE_MODULE_INITIALIZATION_FAILED;
 
 	return aurie_framework_dispatch(module_entry);
 }

@@ -8,9 +8,16 @@ namespace AurieSharpManaged
 	[SupportedOSPlatform("windows")]
 	public static class AurieSharpManaged
 	{
-		public delegate AurieStatus AurieEntryDelegate();
+		public static IYYToolkit? m_YYTK = null;
 
-		[UnmanagedCallersOnly]
+        private static void TestCallback(UIntPtr Context)
+        {
+            FWFrame my_event = new(Context);
+			var x = my_event.GetSwapchainPointer();
+            m_YYTK?.PrintWarning($"Current running code entry: {x}");
+        }
+
+        [UnmanagedCallersOnly]
 		private static AurieStatus __AurieFrameworkDispatch(
 			/* IN */ IntPtr FunctionPointer
 		)
@@ -27,18 +34,14 @@ namespace AurieSharpManaged
 			return AurieStatus.Success;
 		}
 
-		private static AurieStatus ModuleInitialize()
-		{
-			IYYToolkit yytk_interface = new();
-
-			yytk_interface.PrintWarning("This is from my managed module!!!1");
-
-			// show_debug_overlay(true)
-            yytk_interface.CallBuiltin("show_debug_overlay", new List<RValue>() { new RValue(true) });
-			
-			yytk_interface.PrintWarning("Debug overlay should be enabled!");
+        private static AurieStatus ModuleInitialize()
+        {
+			m_YYTK = new();
+			m_YYTK.PrintWarning("This is from my managed module!!!1");
+            m_YYTK.CreateCallback(EventTriggers.EVENT_FRAME, TestCallback, 0);
 
             return AurieStatus.Success;
-		}
-	}
+        }
+
+    }
 }

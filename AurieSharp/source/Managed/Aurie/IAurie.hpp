@@ -44,6 +44,8 @@ namespace Aurie
 			Unavailable
 		};
 
+		public delegate AurieStatus AurieEntryDelegate();
+
 		public ref class AurieInterfaceBase
 		{
 		protected:
