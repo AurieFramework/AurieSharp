@@ -169,7 +169,10 @@
   <ItemGroup>
     <ClCompile Include="include\YYToolkit\Shared.cpp" />
     <ClCompile Include="source\Managed\Aurie\IAurie.cpp" />
-    <ClCompile Include="source\Managed\YYTK\IYYToolkit.cpp" />
+    <ClCompile Include="source\Managed\YYTK\CInstance\CInstance.cpp" />
+    <ClCompile Include="source\Managed\YYTK\Events\Events.cpp" />
+    <ClCompile Include="source\Managed\YYTK\Interface\Interface.cpp" />
+    <ClCompile Include="source\Managed\YYTK\RValue\RValue.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
     <ClCompile Include="source\Native\NETHost\NetHost.cpp" />
   </ItemGroup>

@@ -9,7 +9,6 @@ namespace YYTK
 		using namespace System::Runtime::InteropServices;
 		using namespace System::Collections::Generic;
 
-
 		public enum class RValueType : uint32_t
 		{
 			VALUE_REAL = 0,				// Real value
@@ -39,8 +38,6 @@ namespace YYTK
 			EVENT_SCRIPT_CALL = 4,	// The event represents a DoCallScript() call.
 			EVENT_WNDPROC = 5		// The event represents a WndProc() call.
 		};
-
-		public delegate void CallbackDelegate(System::UIntPtr Context);
 
 		public ref class RValue
 		{
@@ -90,14 +87,30 @@ namespace YYTK
 			RValue^ GetMember(System::String^ MemberName);
 		};
 
+		// This one specifically has to be inline or else the compiler crashes with an access violation.
+		// I don't know what happens behind that mess, nor do I wanna know.
 		public ref class CCode
 		{
 		public:
 			YYTK::CCode* m_UnmanagedCode = nullptr;
 
-			CCode(System::UIntPtr ObjectPointer);
+			CCode(System::UIntPtr ObjectPointer)
+			{
+				if (!ObjectPointer.ToPointer())
+					throw gcnew System::NullReferenceException("Constructing null code object!");
 
-			System::String^ GetName();
+				this->m_UnmanagedCode = reinterpret_cast<YYTK::CCode*>(ObjectPointer.ToPointer());
+			}
+
+			System::String^ GetName()
+			{
+				return gcnew System::String(m_UnmanagedCode->GetName());
+			}
+
+			int GetIndex()
+			{
+				return m_UnmanagedCode->m_CodeIndex;
+			}
 		};
 
 		// Wraps FWCodeEvent&
@@ -106,7 +119,7 @@ namespace YYTK
 		private:
 			YYTK::FWCodeEvent* m_NativeEvent = nullptr;
 		public:
-			FWCodeEvent(System::UIntPtr Object);
+			FWCodeEvent(YYTK::FWCodeEvent& Object);
 
 			bool CalledOriginal();
 
@@ -128,7 +141,7 @@ namespace YYTK
 		private:
 			YYTK::FWFrame* m_NativeEvent = nullptr;
 		public:
-			FWFrame(System::UIntPtr Object);
+			FWFrame(YYTK::FWFrame& Object);
 
 			bool CalledOriginal();
 
@@ -140,6 +153,33 @@ namespace YYTK
 
 			uint32_t GetFlags();
 		};
+
+		public delegate void CodeEventDelegate(FWCodeEvent^ Event);
+		public delegate void FrameEventDelegate(FWFrame^ Event);
+
+		// ChatGPT code lmao
+		private ref class EventManager {
+		public:
+			// Using gcroot to create a handle to a managed object
+			static List<CodeEventDelegate^>^ m_CodeDelegates = gcnew List<CodeEventDelegate^>(8);
+			static List<FrameEventDelegate^>^ m_FrameDelegates = gcnew List<FrameEventDelegate^>(8);
+		};
+
+		inline void GlobalCodeCallback(YYTK::FWCodeEvent& FunctionContext)
+		{
+			// Call each code delegate function with a preconstructed FWCodeEvent
+			FWCodeEvent^ event_context = gcnew YYTK::Managed::FWCodeEvent(FunctionContext);
+			for each (auto function in EventManager::m_CodeDelegates)
+				function->Invoke(event_context);
+		}
+
+		inline void GlobalFrameCallback(YYTK::FWFrame& FunctionContext)
+		{
+			// Call each code delegate function with a preconstructed FWCodeEvent
+			FWFrame^ event_context = gcnew YYTK::Managed::FWFrame(FunctionContext);
+			for each (auto function in EventManager::m_FrameDelegates)
+				function->Invoke(event_context);
+		}
 
 		public ref class IYYToolkit : public Aurie::Managed::AurieInterfaceBase
 		{
@@ -167,6 +207,14 @@ namespace YYTK
 				[In] List<RValue^>^ Arguments
 			);
 
+			Aurie::Managed::AurieStatus CallBuiltinEx(
+				[Out] RValue^ Result,
+				[In] System::String^ FunctionName,
+				[In] CInstance^ SelfInstance,
+				[In] CInstance^ OtherInstance,
+				[In] List<RValue^>^ Arguments
+			);
+
 			void Print(
 				[In] System::ConsoleColor Color,
 				[In] System::String^ Text
@@ -186,10 +234,20 @@ namespace YYTK
 				[In] System::String^ Text
 			);
 
-			Aurie::Managed::AurieStatus CreateCallback(
-				[In] EventTriggers Trigger,
-				[In] CallbackDelegate^ Delegate,
-				[In] int32_t Priority
+			Aurie::Managed::AurieStatus CreateCodeCallback(
+				[In] CodeEventDelegate^ Delegate
+			);
+
+			Aurie::Managed::AurieStatus RemoveCodeCallback(
+				[In] CodeEventDelegate^ Delegate
+			);
+
+			Aurie::Managed::AurieStatus CreateFrameCallback(
+				[In] FrameEventDelegate^ Delegate
+			);
+
+			Aurie::Managed::AurieStatus RemoveFrameCallback(
+				[In] FrameEventDelegate^ Delegate
 			);
 		};
 

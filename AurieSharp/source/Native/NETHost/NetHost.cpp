@@ -195,8 +195,8 @@ AurieStatus RuntimeManager::Initialize(
 	last_error = m_LoadAssemblyAndGetFunctionPointer(
 		managed_dll_path.c_str(),
 		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
-		L"__AurieFrameworkDispatch",
-		UNMANAGEDCALLERSONLY_METHOD,
+		L"ModuleInitialize",
+		L"Aurie.Managed.AurieEntryDelegate, AurieSharp",
 		nullptr,
 		&dummy
 	);
@@ -222,22 +222,9 @@ Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
 	IN const wchar_t* Name
 )
 {
-	AurieStatus(CORECLR_DELEGATE_CALLTYPE * aurie_framework_dispatch)(
-		PVOID ManagedRoutine
-	) = nullptr;
-
 	AurieStatus(CORECLR_DELEGATE_CALLTYPE * module_entry)() = nullptr;
 
-	DWORD last_status = 0;
-	last_status = m_LoadAssemblyAndGetFunctionPointer(
-		(m_ManagedModDirectory / ManagedComponentName).c_str(),
-		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
-		L"__AurieFrameworkDispatch",
-		UNMANAGEDCALLERSONLY_METHOD,
-		nullptr,
-		reinterpret_cast<void**>(&aurie_framework_dispatch)
-	);
-
+	DWORD last_status = AURIE_SUCCESS;
 	last_status = m_LoadAssemblyAndGetFunctionPointer(
 		(m_ManagedModDirectory / ManagedComponentName).c_str(),
 		L"AurieSharpManaged.AurieSharpManaged, AurieSharpManaged",
@@ -248,10 +235,13 @@ Aurie::AurieStatus RuntimeManager::DispatchManagedModule(
 	);
 
 	// AurieFrameworkDispatch ignores nullptr things
-	if (!aurie_framework_dispatch)
-		return AURIE_MODULE_INITIALIZATION_FAILED;
+	if (!module_entry)
+	{
+		// Module doesn't have this routine
+		return AURIE_SUCCESS;
+	}	
 
-	return aurie_framework_dispatch(module_entry);
+	return module_entry();
 }
 
 void RuntimeManager::Uninitialize()

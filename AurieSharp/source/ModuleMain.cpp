@@ -11,7 +11,15 @@ EXPORTED AurieStatus ModulePreinitialize(
 
 	// Initializes the managed code host, and loads the AurieSharpManaged.dll file from the managed mods
 	// Returning an error code means this native module unloads.
-	return g_NetRuntime.Initialize("AurieSharpManaged.dll");
+	auto last_status = g_NetRuntime.Initialize("AurieSharpManaged.dll");
+
+	if (!AurieSuccess(last_status))
+		return last_status;
+
+	return g_NetRuntime.DispatchManagedModule(
+		L"AurieSharpManaged.dll", 
+		L"ModulePreinitialize"
+	);
 }
 
 EXPORTED AurieStatus ModuleInitialize(

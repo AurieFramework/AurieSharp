@@ -24,10 +24,19 @@
     <ClCompile Include="source\Managed\Aurie\IAurie.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
-    <ClCompile Include="source\Managed\YYTK\IYYToolkit.cpp">
+    <ClCompile Include="include\YYToolkit\Shared.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
-    <ClCompile Include="include\YYToolkit\Shared.cpp">
+    <ClCompile Include="source\Managed\YYTK\RValue\RValue.cpp">
+      <Filter>Zdrojové soubory</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Managed\YYTK\Interface\Interface.cpp">
+      <Filter>Zdrojové soubory</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Managed\YYTK\CInstance\CInstance.cpp">
+      <Filter>Zdrojové soubory</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Managed\YYTK\Events\Events.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
   </ItemGroup>
