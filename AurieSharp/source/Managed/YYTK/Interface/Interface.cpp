@@ -123,11 +123,11 @@ namespace YYTK
 		}
 
 		Aurie::Managed::AurieStatus IYYToolkit::CallBuiltinEx(
-			[Out] RValue^ Result, 
-			[In] System::String^ FunctionName, 
-			[In] CInstance^ SelfInstance,
-			[In] CInstance^ OtherInstance,
-			[In] List<RValue^>^ Arguments
+			RValue^% Result, 
+			System::String^ FunctionName, 
+			CInstance^ SelfInstance, 
+			CInstance^ OtherInstance, 
+			List<RValue^>^ Arguments
 		)
 		{
 			// Get the function name
@@ -150,6 +150,8 @@ namespace YYTK
 				OtherInstance->m_UnmanagedInstance,
 				unmanaged_arguments
 			);
+
+			Result = UnmanagedToManagedRValue(temp_buffer);
 
 			// Free the string
 			Marshal::FreeHGlobal(function_name);

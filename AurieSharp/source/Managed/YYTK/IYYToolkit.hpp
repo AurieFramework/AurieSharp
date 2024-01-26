@@ -208,7 +208,7 @@ namespace YYTK
 			);
 
 			Aurie::Managed::AurieStatus CallBuiltinEx(
-				[Out] RValue^ Result,
+				[Out] RValue^% Result,
 				[In] System::String^ FunctionName,
 				[In] CInstance^ SelfInstance,
 				[In] CInstance^ OtherInstance,
