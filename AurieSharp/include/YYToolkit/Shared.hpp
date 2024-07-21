@@ -8,8 +8,8 @@
 #define YYTK_SHARED_H_
 
 #define YYTK_MAJOR 3
-#define YYTK_MINOR 2
-#define YYTK_PATCH 3
+#define YYTK_MINOR 3
+#define YYTK_PATCH 0
 
 #ifndef YYTK_CPP_VERSION
 #ifndef _MSVC_LANG
@@ -84,7 +84,7 @@ namespace YYTK
 		EVENT_OBJECT_CALL = 1,	// The event represents a Code_Execute() call.
 		EVENT_FRAME = 2,		// The event represents an IDXGISwapChain::Present() call.
 		EVENT_RESIZE = 3,		// The event represents an IDXGISwapChain::ResizeBuffers() call.
-		EVENT_SCRIPT_CALL = 4,	// The event represents a DoCallScript() call.
+		EVENT_UNUSED = 4,		// This value is unused.
 		EVENT_WNDPROC = 5		// The event represents a WndProc() call.
 	};
 
@@ -159,6 +159,18 @@ namespace YYTK
 		OUT RValue& Result,
 		IN int ArgumentCount,
 		IN RValue** Arguments // Array of RValue pointers
+		);
+
+	using PFN_YYObjectBaseAdd = void(__thiscall*)(
+		IN YYObjectBase* This,
+		IN const char* Name,
+		IN const RValue& Value,
+		IN int Flags
+		);
+
+	using PFN_FindAllocSlot = int(*)(
+		OPTIONAL IN YYObjectBase* Object,
+		IN const char* Name
 		);
 
 #pragma pack(push, 4)
@@ -1703,8 +1715,6 @@ namespace YYTK
 	using FWFrame = FunctionWrapper<HRESULT(IDXGISwapChain*, UINT, UINT)>;
 	// IDXGISwapChain::ResizeBuffers
 	using FWResize = FunctionWrapper<HRESULT(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT)>;
-	// DoCallScript (only in VM)
-	using FWScriptEvent = FunctionWrapper<PVOID(CScript*, int, char*, PVOID, CInstance*, CInstance*)>;
 	// WndProc calls
 	using FWWndProc = FunctionWrapper<LRESULT(HWND, UINT, WPARAM, LPARAM)>;
 
@@ -1867,6 +1877,12 @@ namespace YYTK
 			IN const RValue& Object,
 			IN std::function<void(CInstance* Self, CInstance* Other)> Method
 		) = 0;
+
+		virtual Aurie::AurieStatus GetVariableSlot(
+			IN const RValue& Object,
+			IN const char* VariableName,
+			OUT int32_t& Hash
+		) = 0;
 	};
 
 #if YYTK_DEFINE_INTERNAL
@@ -1968,7 +1984,9 @@ namespace YYTK
 		T* m_Last;
 		int32_t m_Count;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(LinkedList<CInstance>) == 0x18);
+#endif // _WIN64
 
 	enum eBuffer_Type : int32_t
 	{
@@ -2018,7 +2036,9 @@ namespace YYTK
 		virtual uint8_t* Compress(int _offset, int _size, uint32_t& resultSize) = 0;
 		virtual uint8_t* Decompress(uint32_t& resultSize) = 0;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(IBuffer) == 0x8);
+#endif // _WIN64
 
 	struct CLayerElementBase
 	{
@@ -2040,14 +2060,18 @@ namespace YYTK
 			CLayerElementBase* m_Blink;
 		};
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CLayerElementBase) == 0x30);
+#endif // _WIN64
 
 	struct CLayerInstanceElement : CLayerElementBase
 	{
 		int32_t m_InstanceID;
 		CInstance* m_Instance;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CLayerInstanceElement) == 0x40);
+#endif // _WIN64
 
 	struct CLayerSpriteElement : CLayerElementBase
 	{
@@ -2065,9 +2089,11 @@ namespace YYTK
 		float m_X;
 		float m_Y;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CLayerSpriteElement) == 0x68);
+#endif // _WIN64
 
-	__declspec(align(8)) struct CLayer
+	struct CLayer
 	{
 		int32_t m_Id;
 		int32_t m_Depth;
@@ -2091,7 +2117,9 @@ namespace YYTK
 		CLayer* m_Blink;
 		PVOID m_GCProxy;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CLayer) == 0xA0);
+#endif // _WIN64
 
 	// A representation of a room, as from the data.win file
 	struct YYRoom
@@ -2128,7 +2156,9 @@ namespace YYTK
 		float m_PhysicsGravityY;
 		float m_PhysicsPixelToMeters;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(YYRoom) == 0x58);
+#endif // _WIN64
 
 	// Note: this is not how RValues store arrays
 	template <typename T>
@@ -2137,7 +2167,9 @@ namespace YYTK
 		int32_t Length;
 		T* Array;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CArrayStructure<int>) == 0x10);
+#endif // _WIN64
 
 	// Seems to be mostly stable, some elements at the end are however omitted
 	struct CRoom
@@ -2189,7 +2221,9 @@ namespace YYTK
 		int32_t m_EffectLayerIdCount;
 		int32_t m_EffectLayerIdMax;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CRoom) == 0x218);
+#endif // _WIN64
 
 	struct CInstanceBase
 	{
@@ -2197,7 +2231,9 @@ namespace YYTK
 
 		RValue* m_YYVars;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CInstanceBase) == 0x10);
+#endif // _WIN64
 
 	enum EJSRetValBool : int32_t
 	{
@@ -2295,6 +2331,18 @@ namespace YYTK
 
 		virtual RValue* GetDispose() = 0;
 
+		bool Add(
+			IN const char* Name,
+			IN const RValue& Value,
+			IN int Flags
+		);
+
+		bool IsExtensible();
+
+		RValue* FindOrAllocValue(
+			IN const char* Name
+		);
+
 		YYObjectBase* m_Flink;
 		YYObjectBase* m_Blink;
 		YYObjectBase* m_Prototype;
@@ -2318,7 +2366,9 @@ namespace YYTK
 		int32_t m_RValueInitType;
 		int32_t m_CurrentSlot;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(YYObjectBase) == 0x88);
+#endif // _WIN64
 
 	struct CScriptRef : YYObjectBase
 	{
@@ -2332,7 +2382,9 @@ namespace YYTK
 		PVOID m_Construct;
 		const char* m_Tag;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CScriptRef) == 0xE0);
+#endif // _WIN64
 
 	struct CPhysicsDataGM
 	{
@@ -2350,14 +2402,18 @@ namespace YYTK
 		float m_PhysicsFriction;
 		int m_PhysicsVertexCount;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CPhysicsDataGM) == 0x30);
+#endif // _WIN64
 
 	struct CEvent
 	{
 		CCode* m_Code;
 		int32_t m_OwnerObjectID;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CEvent) == 0x10);
+#endif // _WIN64
 
 	struct CObjectGM
 	{
@@ -2375,13 +2431,17 @@ namespace YYTK
 		int32_t m_Mask;
 		int32_t m_ID;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CObjectGM) == 0x98);
+#endif // _WIN64
 
 	struct GCObjectContainer : YYObjectBase
 	{
 		CHashMap<YYObjectBase*, YYObjectBase*, 3>* m_YYObjectMap;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(GCObjectContainer) == 0x90);
+#endif // _WIN64
 
 	struct YYRECT
 	{
@@ -2434,7 +2494,9 @@ namespace YYTK
 		CInstance* m_Flink;
 		CInstance* m_Blink;
 	};
+#ifdef _WIN64
 	static_assert(sizeof(CInstanceInternal) == 0xF8);
+#endif // _WIN64
 
 	struct CInstance : YYObjectBase
 	{
@@ -2458,7 +2520,9 @@ namespace YYTK
 			public:
 				CInstanceInternal Members;
 			} Unmasked;
+#ifdef _WIN64
 			static_assert(sizeof(Unmasked) == 0x100);
+#endif // _WIN64
 
 			// 2022.1 => 2023.1 (may be used later, haven't checked)
 			struct
@@ -2469,7 +2533,9 @@ namespace YYTK
 			public:
 				CInstanceInternal Members;
 			} Masked;
+#ifdef _WIN64
 			static_assert(sizeof(Masked) == 0x108);
+#endif // _WIN64
 		};
 	public:
 
@@ -2487,7 +2553,9 @@ namespace YYTK
 	};
 	// sizeof(0x1A8) is for PreMasked instances
 	// sizeof(0x1B0) is for Masked instances
+#ifdef _WIN64
 	static_assert(sizeof(CInstance) == 0x1A8 || sizeof(CInstance) == 0x1B0);
+#endif // _WIN64
 
 #endif // YYTK_DEFINE_INTERNAL
 }

@@ -32,9 +32,6 @@ namespace AurieSharpManaged
 				m_YYTK?.PrintWarning(text);
 
                 m_Stopwatch.Reset();
-				m_YYTK?.CallBuiltinEx(
-				
-					)
             }
         }
 		

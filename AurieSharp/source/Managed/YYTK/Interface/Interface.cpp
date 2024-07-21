@@ -30,16 +30,20 @@ namespace YYTK
 			[Out] int% FunctionIndex
 		)
 		{
+			// Convert the string into an unmanaged one
 			System::IntPtr function_name = Marshal::StringToHGlobalAnsi(FunctionName);
 
+			// Call the native function
 			int function_index = 0;
 			Aurie::AurieStatus last_status = this->GetYYTKInterface()->GetNamedRoutineIndex(
 				reinterpret_cast<const char*>(function_name.ToPointer()),
 				&function_index
 			);
 
+			// Free the unmanaged string
 			Marshal::FreeHGlobal(function_name);
 
+			// Return the value only on success
 			if (Aurie::AurieSuccess(last_status))
 				FunctionIndex = function_index;
 
@@ -75,7 +79,7 @@ namespace YYTK
 		}
 
 		Aurie::Managed::AurieStatus IYYToolkit::GetGlobalInstance(
-			[Out] CInstance% Instance
+			[Out] CInstance^% Instance
 		)
 		{
 			// Try to get the global instance from the unmanaged interface
@@ -87,7 +91,8 @@ namespace YYTK
 			// Assign only if successful so to not create a null instance
 			if (Aurie::AurieSuccess(last_status))
 			{
-				Instance.m_UnmanagedInstance = instance_ptr;
+				// We have to create a new instance here and use the constructor
+				Instance = gcnew CInstance(System::UIntPtr(instance_ptr));
 			}
 
 			return static_cast<Aurie::Managed::AurieStatus>(last_status);
@@ -252,7 +257,7 @@ namespace YYTK
 			// which just means GlobalCodeCallback is already listed as a native callback.
 			if (AurieSuccess(unmanaged_status) || unmanaged_status == Aurie::AURIE_OBJECT_ALREADY_EXISTS)
 			{
-				EventManager::m_CodeDelegates->Add(Delegate);
+				DelegateManager::m_CodeDelegates->Add(Delegate);
 
 				// Return success even if the native function returned AURIE_OBJECT_ALREADY_EXISTS,
 				// in order to not confuse managed mods with an error return code on success.
@@ -269,11 +274,11 @@ namespace YYTK
 		{
 			// Check if the callback even exists, if it does remove it
 			// If it doesn't, return an error code
-			if (!EventManager::m_CodeDelegates->Remove(Delegate))
+			if (!DelegateManager::m_CodeDelegates->Remove(Delegate))
 				return Aurie::Managed::AurieStatus::ObjectNotFound;
 
 			// If there's still callbacks left in our list, just return now
-			if (EventManager::m_CodeDelegates->Count != 0)
+			if (DelegateManager::m_CodeDelegates->Count != 0)
 				return Aurie::Managed::AurieStatus::Success;
 
 			// No callbacks remaining, meaning we can remove our global callback too
@@ -306,7 +311,7 @@ namespace YYTK
 			// which just means GlobalCodeCallback is already listed as a native callback.
 			if (AurieSuccess(unmanaged_status) || unmanaged_status == Aurie::AURIE_OBJECT_ALREADY_EXISTS)
 			{
-				EventManager::m_FrameDelegates->Add(Delegate);
+				DelegateManager::m_FrameDelegates->Add(Delegate);
 
 				// Return success even if the native function returned AURIE_OBJECT_ALREADY_EXISTS,
 				// in order to not confuse managed mods with an error return code on success.
@@ -323,11 +328,11 @@ namespace YYTK
 		{
 			// Check if the callback even exists, if it does remove it
 			// If it doesn't, return an error code
-			if (!EventManager::m_FrameDelegates->Remove(Delegate))
+			if (!DelegateManager::m_FrameDelegates->Remove(Delegate))
 				return Aurie::Managed::AurieStatus::ObjectNotFound;
 
 			// If there's still callbacks left in our list, just return now
-			if (EventManager::m_FrameDelegates->Count != 0)
+			if (DelegateManager::m_FrameDelegates->Count != 0)
 				return Aurie::Managed::AurieStatus::Success;
 
 			// No callbacks remaining, meaning we can remove our global callback too
@@ -338,6 +343,59 @@ namespace YYTK
 			);
 
 			return static_cast<Aurie::Managed::AurieStatus>(unmanaged_status);
+		}
+
+		Aurie::Managed::AurieStatus IYYToolkit::GetInstanceMember(
+			[In] RValue^ Instance, 
+			[In] System::String^ MemberName, 
+			[Out] RValue^% Member
+		)
+		{
+			// Get the function name
+			System::IntPtr function_name = Marshal::StringToHGlobalAnsi(MemberName);
+
+			// Get the unmanaged pointer to the instance member
+			YYTK::RValue* rv_pointer = nullptr;
+			Aurie::AurieStatus unmanaged_status = GetYYTKInterface()->GetInstanceMember(
+				*Instance->m_UnmanagedRValue,
+				reinterpret_cast<const char*>(function_name.ToPointer()),
+				rv_pointer
+			);
+
+			// Free the string
+			Marshal::FreeHGlobal(function_name);
+
+			// If we failed, don't overwrite Member, just return the error code
+			if (!Aurie::AurieSuccess(unmanaged_status))
+				return static_cast<Aurie::Managed::AurieStatus>(unmanaged_status);
+
+			// Return success and overwrite Member
+			Member = UnmanagedToManagedRValue(*rv_pointer, false);
+			return Aurie::Managed::AurieStatus::Success;
+		}
+
+		Aurie::Managed::AurieStatus IYYToolkit::EnumInstanceMembers(
+			[In] RValue^ Instance, 
+			[In] InstanceMemberEnumerator^ Enumerator
+		)
+		{
+			// Make sure we're enumerating a struct
+			if (!Instance->IsStruct())
+				throw gcnew System::InvalidCastException("Trying to enumerate member variables of a non-struct variable!");
+
+			// Queue the enumerator
+			DelegateManager::m_InstanceEnumerators->Enqueue(Enumerator);
+
+			// Run the enumeration function - it calls the last enqueued element
+			Aurie::AurieStatus last_status = GetYYTKInterface()->EnumInstanceMembers(
+				ManagedToUnmanagedRValue(Instance),
+				GlobalEnumInstanceMethod
+			);
+
+			// Dequeue the enumerator
+			DelegateManager::m_InstanceEnumerators->Dequeue();
+
+			return static_cast<Aurie::Managed::AurieStatus>(last_status);
 		}
 	}
 }

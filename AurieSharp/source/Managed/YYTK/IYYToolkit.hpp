@@ -39,6 +39,8 @@ namespace YYTK
 			EVENT_WNDPROC = 5		// The event represents a WndProc() call.
 		};
 
+		ref class CInstance;
+
 		public ref class RValue
 		{
 		public:
@@ -56,6 +58,8 @@ namespace YYTK
 
 			RValue(System::String^ Value);
 
+			RValue(YYTK::Managed::CInstance^ Value);
+
 			~RValue();
 
 			double AsReal();
@@ -66,6 +70,10 @@ namespace YYTK
 
 			bool AsBool();
 
+			bool IsArray();
+
+			bool IsStruct();
+
 			System::String^ AsString();
 
 			bool IsUndefined();
@@ -75,6 +83,20 @@ namespace YYTK
 			RValue^ GetMember(System::String^ MemberName);
 
 			RValueType GetKind();
+
+			// Direct array and struct accesses
+			property RValue^ default[System::String^]
+			{
+				RValue^ get(System::String^ Key);
+
+				void set(System::String^ Key, RValue^ Value);
+			}
+
+			property RValue^ default[int]
+			{
+				RValue^ get(int Key);
+				void set(int Key, RValue^ Value);
+			}
 		};
 
 		public ref class CInstance
@@ -85,6 +107,13 @@ namespace YYTK
 			CInstance(System::UIntPtr InstancePointer);
 
 			RValue^ GetMember(System::String^ MemberName);
+
+			property RValue^ default[System::String^]
+			{
+				RValue^ get(System::String ^ Key);
+
+				void set(System::String ^ Key, RValue ^ Value);
+			}
 		};
 
 		// This one specifically has to be inline or else the compiler crashes with an access violation.
@@ -156,30 +185,16 @@ namespace YYTK
 
 		public delegate void CodeEventDelegate(FWCodeEvent^ Event);
 		public delegate void FrameEventDelegate(FWFrame^ Event);
+		public delegate bool InstanceMemberEnumerator(System::String^ MemberName, RValue^ Value);
 
 		// ChatGPT code lmao
-		private ref class EventManager {
+		private ref class DelegateManager {
 		public:
 			// Using gcroot to create a handle to a managed object
 			static List<CodeEventDelegate^>^ m_CodeDelegates = gcnew List<CodeEventDelegate^>(8);
 			static List<FrameEventDelegate^>^ m_FrameDelegates = gcnew List<FrameEventDelegate^>(8);
+			static Queue<InstanceMemberEnumerator^>^ m_InstanceEnumerators = gcnew Queue<InstanceMemberEnumerator^>();
 		};
-
-		inline void GlobalCodeCallback(YYTK::FWCodeEvent& FunctionContext)
-		{
-			// Call each code delegate function with a preconstructed FWCodeEvent
-			FWCodeEvent^ event_context = gcnew YYTK::Managed::FWCodeEvent(FunctionContext);
-			for each (auto function in EventManager::m_CodeDelegates)
-				function->Invoke(event_context);
-		}
-
-		inline void GlobalFrameCallback(YYTK::FWFrame& FunctionContext)
-		{
-			// Call each code delegate function with a preconstructed FWCodeEvent
-			FWFrame^ event_context = gcnew YYTK::Managed::FWFrame(FunctionContext);
-			for each (auto function in EventManager::m_FrameDelegates)
-				function->Invoke(event_context);
-		}
 
 		public ref class IYYToolkit : public Aurie::Managed::AurieInterfaceBase
 		{
@@ -199,7 +214,7 @@ namespace YYTK
 			);
 
 			Aurie::Managed::AurieStatus GetGlobalInstance(
-				[Out] CInstance% Instance
+				[Out] CInstance^% Instance
 			);
 
 			RValue^ CallBuiltin(
@@ -249,9 +264,20 @@ namespace YYTK
 			Aurie::Managed::AurieStatus RemoveFrameCallback(
 				[In] FrameEventDelegate^ Delegate
 			);
+
+			Aurie::Managed::AurieStatus GetInstanceMember(
+				[In] RValue^ Instance,
+				[In] System::String^ MemberName,
+				[Out] RValue^% Member
+			);
+
+			Aurie::Managed::AurieStatus EnumInstanceMembers(
+				[In] RValue^ Instance,
+				[In] InstanceMemberEnumerator^ Enumerator
+			);
 		};
 
-		inline YYTK::RValue ManagedToUnmanagedRValue(YYTK::Managed::RValue^ Value)
+		inline YYTK::RValue& ManagedToUnmanagedRValue(YYTK::Managed::RValue^ Value)
 		{
 			return *Value->m_UnmanagedRValue;
 		}
@@ -281,6 +307,30 @@ namespace YYTK
 			}
 
 			return managed_rvalue;
+		}
+
+
+		inline void GlobalCodeCallback(YYTK::FWCodeEvent& FunctionContext)
+		{
+			// Call each code delegate function with a preconstructed FWCodeEvent
+			FWCodeEvent^ event_context = gcnew YYTK::Managed::FWCodeEvent(FunctionContext);
+			for each (auto function in DelegateManager::m_CodeDelegates)
+				function->Invoke(event_context);
+		}
+
+		inline void GlobalFrameCallback(YYTK::FWFrame& FunctionContext)
+		{
+			// Call each code delegate function with a preconstructed FWCodeEvent
+			FWFrame^ event_context = gcnew YYTK::Managed::FWFrame(FunctionContext);
+			for each (auto function in DelegateManager::m_FrameDelegates)
+				function->Invoke(event_context);
+		}
+
+		inline bool GlobalEnumInstanceMethod(const char* MemberName, YYTK::RValue* Value)
+		{
+			// Call the first in-line code delegate with pre-constructed arguments
+			System::String^ member_name = gcnew System::String(MemberName);
+			return DelegateManager::m_InstanceEnumerators->Peek()->Invoke(member_name, UnmanagedToManagedRValue(*Value, false));
 		}
 	}
 }

@@ -28,5 +28,18 @@ namespace YYTK
 
 			return result_value;
 		}
+
+		RValue^ CInstance::default::get(System::String^ Key)
+		{
+			return this->GetMember(Key);
+		}
+
+		void CInstance::default::set(System::String^ Key, RValue^ Value)
+		{
+			RValue^ rv = this->GetMember(Key);
+
+			// Copy the RValues
+			*rv->m_UnmanagedRValue = *Value->m_UnmanagedRValue;
+		}
 	}
 }
