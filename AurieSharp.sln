@@ -5,7 +5,11 @@ VisualStudioVersion = 17.8.34316.72
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AurieSharp", "AurieSharp\AurieSharp.vcxproj", "{44E53BEA-A09D-435D-80FF-66EE5DF5778F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AurieSharpManaged", "AurieSharpManaged\AurieSharpManaged.csproj", "{F7C17B19-0B15-4C4F-8048-760A82EE0068}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AurieSharpManaged", "AurieSharpManaged\AurieSharpManaged.csproj", "{F7C17B19-0B15-4C4F-8048-760A82EE0068}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UndertaleModLib", "..\UndertaleModTool\UndertaleModLib\UndertaleModLib.csproj", "{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Underanalyzer", "..\UndertaleModTool\Underanalyzer\Underanalyzer\Underanalyzer.csproj", "{057375F4-B07D-4577-9270-65B79DA3EED2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -41,6 +45,30 @@ Global
 		{F7C17B19-0B15-4C4F-8048-760A82EE0068}.Release|x64.Build.0 = Release|Any CPU
 		{F7C17B19-0B15-4C4F-8048-760A82EE0068}.Release|x86.ActiveCfg = Release|Any CPU
 		{F7C17B19-0B15-4C4F-8048-760A82EE0068}.Release|x86.Build.0 = Release|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|x64.ActiveCfg = Debug|x64
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|x64.Build.0 = Debug|x64
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Debug|x86.Build.0 = Debug|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|x64.ActiveCfg = Release|x64
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|x64.Build.0 = Release|x64
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|x86.ActiveCfg = Release|Any CPU
+		{03C66E83-7E09-4C63-B3B4-02CF696A2DDF}.Release|x86.Build.0 = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|x64.Build.0 = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Debug|x86.Build.0 = Debug|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|x64.ActiveCfg = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|x64.Build.0 = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|x86.ActiveCfg = Release|Any CPU
+		{057375F4-B07D-4577-9270-65B79DA3EED2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

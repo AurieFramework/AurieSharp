@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\UndertaleModTool\UndertaleModLib\UndertaleModLib.csproj" />
     <ProjectReference Include="..\AurieSharp\AurieSharp.vcxproj" />
   </ItemGroup>
 
