@@ -9,43 +9,27 @@ namespace AurieSharpManaged
 	public static class AurieSharpManaged
 	{
 		private static IYYToolkit? m_YYTK = null;
-		private static Stopwatch m_Stopwatch = new Stopwatch();
+		private static bool load_items = true;
+		private static int held_item_id = -1;
+		private static string[] ITEM_NAMES = { "lol", "hi" };
 
-		public static void TestCallback(FWFrame Context)
+		public static void TestCallback(FWCodeEvent Context)
 		{
-			if (!m_Stopwatch.IsRunning)
+			if (load_items)
 			{
-				// Start if not running
-				m_Stopwatch.Start();
-			}
-			else
-			{
-				m_Stopwatch.Stop();
-
-				string text = "Last frame took {0:F2}ms ({1:F2} fps)";
-				text = String.Format(
-					text, 
-					m_Stopwatch.Elapsed.TotalMicroseconds / 1000.0, 
-					(double)(1e6) / m_Stopwatch.Elapsed.TotalMicroseconds
-				);
-
-				m_YYTK?.PrintWarning(text);
-
-				m_Stopwatch.Reset();
+				foreach (var item_name in ITEM_NAMES)
+				{
+					// There is no CallGameScriptEx implemented yet :(
+				}
 			}
 		}
-		
+
 		public static AurieStatus ModuleInitialize()
 		{
-			m_YYTK = new();
-			m_YYTK.PrintWarning("This is from my managed module!!!1");
-			m_YYTK.CreateFrameCallback(
-				TestCallback
-			);
+			IYYToolkit module_interface = new();
+            module_interface.CallBuiltin("show_message", new() { new RValue("Hi") });
 
-			
-
-			return AurieStatus.Success;
+            return AurieStatus.Success;
 		}
 	}
 }
