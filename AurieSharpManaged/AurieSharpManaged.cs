@@ -1,35 +1,31 @@
-﻿using System.Diagnostics;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Aurie.Managed;
-using YYTK.Managed;
+using AurieSharpInterop;
+using YYTKInterop;
 
 namespace AurieSharpManaged
 {
-	[SupportedOSPlatform("windows")]
-	public static class AurieSharpManaged
-	{
-		private static IYYToolkit? m_YYTK = null;
-		private static bool load_items = true;
-		private static int held_item_id = -1;
-		private static string[] ITEM_NAMES = { "lol", "hi" };
+    [SupportedOSPlatform("windows")]
+    public static class AurieSharpManaged
+    {
+        public static void BeforeModifyHealth(ScriptExecutionContext Context)
+        {
+            double hp_gained = 0;
 
-		public static void TestCallback(FWCodeEvent Context)
-		{
-			if (load_items)
-			{
-				foreach (var item_name in ITEM_NAMES)
-				{
-					// There is no CallGameScriptEx implemented yet :(
-				}
-			}
-		}
+            if (Context.Arguments[0].TryGetDouble(out hp_gained))
+            {
+                // If the game is trying to make us lose HP, cancel the call implicitely and return undefined.
+                if (hp_gained < 0)
+                    Context.OverrideArgument(0, 0);
+            }
+        }
 
-		public static AurieStatus ModuleInitialize()
-		{
-			IYYToolkit module_interface = new();
-            module_interface.CallBuiltin("show_message", new() { new RValue("Hi") });
+        [UnmanagedCallersOnly]
+        public static AurieStatus ModuleInitialize()
+        {
+            Game.Events.AddPreScriptNotification("gml_Script_modify_health@Ari@Ari", BeforeModifyHealth);
 
             return AurieStatus.Success;
-		}
-	}
+        }
+    }
 }
