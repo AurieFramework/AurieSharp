@@ -63,6 +63,10 @@ namespace AurieSharpInterop
 	public ref class Framework abstract sealed
 	{
 	public:
+		static System::String^ GetGameProcessPath();
+
+		static System::String^ GetGameDirectory();
+
 		static System::IntPtr GetInterface(
 			[In] System::String^ Name
 		);

@@ -62,6 +62,8 @@ namespace YYTKInterop
 		void OverrideArgument(int Index, GameVariable^ NewValue);
 
 		void OverrideResult(GameVariable^ NewValue);
+
+		GameVariable^ GetResult();
 	};
 
 	public delegate void GameEventCallbackHandler(GameObject^ Self, GameObject^ Other);

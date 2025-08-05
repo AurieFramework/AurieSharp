@@ -1,5 +1,8 @@
 #include "GameInstance.hpp"
+#include <msclr/marshal_cppstd.h>
+
 using namespace System;
+using namespace msclr::interop;
 
 namespace YYTKInterop
 {

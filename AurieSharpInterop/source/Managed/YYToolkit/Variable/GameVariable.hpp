@@ -2,7 +2,6 @@
 #include <YYToolkit/YYTK_Shared.hpp>
 #include "../Objects/GameInstance.hpp"
 
-
 namespace YYTKInterop
 {
 	using namespace System::Runtime::InteropServices;
@@ -51,6 +50,13 @@ namespace YYTKInterop
 		GameObject^ ToGameObject();
 		GameInstance^ ToGameInstance();
 
+		static operator double(GameVariable^ Variable);
+		static operator System::Int32(GameVariable^ Variable);
+		static operator System::Int64(GameVariable^ Variable);
+		static operator System::String^(GameVariable^ Variable);
+		static operator GameObject^(GameVariable^ Variable);
+		static operator GameInstance^ (GameVariable^ Variable);
+
 		bool TryGetInt32([Out] System::Int32% Value);
 		bool TryGetInt64([Out] System::Int64% Value);
 		bool TryGetDouble([Out] double% Value);
@@ -65,7 +71,18 @@ namespace YYTKInterop
 
 		static property GameVariable^ Undefined
 		{
-			GameVariable^ get();
+			GameVariable ^ get();
+		}
+
+		property System::String^ Type
+		{
+			System::String^ get();
+		}
+
+		property GameVariable^ default[System::String^]
+		{
+			GameVariable^ get(System::String ^ name);
+			void set(System::String^ name, GameVariable ^ value);
 		}
 	};
 }

@@ -368,7 +368,7 @@ namespace YYTKInterop
 		auto list = gcnew Gen::List<GameVariable^>(this->m_ArgumentCount);
 
 		for (int i = 0; i < m_ArgumentCount; i++)
-			list->Add(GameVariable::CreateFromRValue(*m_Arguments[i]));
+			list->Add(GameVariable::CreateFromRValue(*(m_Arguments[i])));
 
 		return list->AsReadOnly();
 	}
@@ -390,6 +390,11 @@ namespace YYTKInterop
 	{
 		m_Result = NewValue->ToRValue();
 		m_ResultOverridden = true;
+	}
+
+	GameVariable^ ScriptExecutionContext::GetResult()
+	{
+		return GameVariable::CreateFromRValue(m_Result);
 	}
 
 	System::String^ ScriptExecutionContext::Name::get()

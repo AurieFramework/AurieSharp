@@ -225,12 +225,21 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 	}
 
 	bool was_script_cancelled = false;
+
+	DbgPrintEx(
+		Aurie::LOG_SEVERITY_INFO,
+		"Dispatch script %s => Self %p, Other %p, Result %p, Argc %d, Args %p",
+		hook_name.c_str(),
+		Self, Other, &Result, ArgumentCount, Arguments
+	);
+
 	RaiseManagedBeforeScriptEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments, was_script_cancelled);
 
 	if (was_script_cancelled)
 		return Result;
 
-	Result = original(Self, Other, Result, ArgumentCount, Arguments);
+	original(Self, Other, Result, ArgumentCount, Arguments);
+
 	RaiseManagedAfterScriptEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments);
 
 	return Result;

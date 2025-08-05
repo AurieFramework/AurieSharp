@@ -2,14 +2,13 @@
 #include <msclr/marshal_cppstd.h>
 
 using namespace msclr::interop;
-using namespace System;
 
 namespace YYTKInterop
 {
 	GameVariable^ GameVariable::CreateFromRValue(const YYTK::RValue& Value)
 	{
 		GameVariable^ variable = gcnew GameVariable();
-		*variable->m_Value = Value;
+		variable->InitializeFromRValue(Value);
 
 		return variable;
 	}
@@ -19,7 +18,7 @@ namespace YYTKInterop
 		this->m_Value = static_cast<YYTK::RValue*>(Aurie::MmAllocateMemory(Aurie::g_ArSelfModule, sizeof(YYTK::RValue)));
 
 		if (!this->m_Value)
-			throw gcnew OutOfMemoryException("Failed to allocate RValue memory!");
+			throw gcnew System::OutOfMemoryException("Failed to allocate RValue memory!");
 		
 		*m_Value = Value;
 	}
@@ -59,7 +58,7 @@ namespace YYTKInterop
 		InitializeFromRValue(YYTK::RValue(Value->m_Object));
 	}
 
-	GameVariable::GameVariable(String^ Value)
+	GameVariable::GameVariable(System::String^ Value)
 	{
 		// Note: This is okay, since YYCreateString (RV_CreateFromString internals) copy it to a GM-owned buffer.
 		InitializeFromRValue(YYTK::RValue(marshal_as<std::string>(Value).c_str()));
@@ -92,20 +91,20 @@ namespace YYTKInterop
 
 	System::Int32 GameVariable::ToInt32()
 	{
-		Int32 value = 0;
+		System::Int32 value = 0;
 		if (TryGetInt32(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to Int32!");
+		throw gcnew System::InvalidCastException("RValue is not castable to Int32!");
 	}
 
 	System::Int64 GameVariable::ToInt64()
 	{
-		Int64 value = 0;
+		System::Int64 value = 0;
 		if (TryGetInt64(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to Int64!");
+		throw gcnew System::InvalidCastException("RValue is not castable to Int64!");
 	}
 
 	double GameVariable::ToDouble()
@@ -114,7 +113,7 @@ namespace YYTKInterop
 		if (TryGetDouble(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to Double!");
+		throw gcnew System::InvalidCastException("RValue is not castable to Double!");
 	}
 
 	System::String^ GameVariable::ToString()
@@ -123,7 +122,7 @@ namespace YYTKInterop
 		if (TryGetString(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to String!");
+		throw gcnew System::InvalidCastException("RValue is not castable to String!");
 	}
 
 	GameObject^ GameVariable::ToGameObject()
@@ -132,7 +131,7 @@ namespace YYTKInterop
 		if (TryGetGameObject(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to GameObject!");
+		throw gcnew System::InvalidCastException("RValue is not castable to GameObject!");
 	}
 
 	GameInstance^ GameVariable::ToGameInstance()
@@ -141,10 +140,40 @@ namespace YYTKInterop
 		if (TryGetGameInstance(value))
 			return value;
 
-		throw gcnew InvalidCastException("RValue is not castable to GameInstance!");
+		throw gcnew System::InvalidCastException("RValue is not castable to GameInstance!");
 	}
 
-	bool GameVariable::TryGetInt32(Int32% Value)
+	GameVariable::operator double(GameVariable^ Variable)
+	{
+		return Variable->ToDouble();
+	}
+
+	GameVariable::operator System::Int32(GameVariable^ Variable)
+	{
+		return Variable->ToInt32();
+	}
+
+	GameVariable::operator System::Int64(GameVariable^ Variable)
+	{
+		return Variable->ToInt64();
+	}
+
+	GameVariable::operator System::String^(GameVariable^ Variable)
+	{
+		return Variable->ToString();
+	}
+
+	GameVariable::operator GameObject^(GameVariable^ Variable)
+	{
+		return Variable->ToGameObject();
+	}
+
+	GameVariable::operator GameInstance^(GameVariable^ Variable)
+	{
+		return Variable->ToGameInstance();
+	}
+
+	bool GameVariable::TryGetInt32(System::Int32% Value)
 	{
 		if (!m_Value->IsNumberConvertible())
 			return false;
@@ -216,5 +245,30 @@ namespace YYTKInterop
 	GameVariable^ GameVariable::Undefined::get()
 	{
 		return GameVariable::CreateFromRValue(YYTK::RValue());
+	}
+
+	System::String^ GameVariable::Type::get()
+	{
+		return gcnew System::String(m_Value->GetKindName().c_str());
+	}
+
+	GameVariable^ GameVariable::default::get(System::String^ Name)
+	{
+		if (!m_Value->IsStruct())
+			throw gcnew System::InvalidCastException("Cannot access struct members of a non-struct variable!");
+
+		YYTK::RValue* native_value = m_Value->GetRefMember(marshal_as<std::string>(Name));
+		if (!native_value)
+			throw gcnew System::InvalidCastException("Cannot access non-existing member of a struct variable!");
+
+		return GameVariable::CreateFromRValue(*native_value);
+	}
+
+	void GameVariable::default::set(System::String^ Name, GameVariable^ Value)
+	{
+		if (!m_Value->IsStruct())
+			throw gcnew System::InvalidCastException("Cannot access struct members of a non-struct variable!");
+
+		(*m_Value)[marshal_as<std::string>(Name)] = Value->ToRValue();
 	}
 }

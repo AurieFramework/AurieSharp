@@ -4,6 +4,23 @@ using namespace msclr::interop;
 
 namespace AurieSharpInterop
 {
+	System::String^ Framework::GetGameProcessPath()
+	{
+		auto path = Aurie::Internal::MdpGetImagePath(Aurie::g_ArInitialImage);
+		return gcnew System::String(path.string().c_str());
+	}
+
+	System::String^ Framework::GetGameDirectory()
+	{
+		Aurie::fs::path path;
+		Aurie::AurieStatus last_status = Aurie::Internal::MdpGetImageFolder(Aurie::g_ArInitialImage, path);
+
+		if (!Aurie::AurieSuccess(last_status))
+			throw gcnew System::InvalidOperationException("Failed to get game folder!");
+
+		return gcnew System::String(path.string().c_str());
+	}
+
 	System::IntPtr Framework::GetInterface(
 		[In] System::String^ Name
 	)
