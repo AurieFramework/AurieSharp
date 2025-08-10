@@ -1,6 +1,14 @@
 #pragma once
+#pragma unmanaged
 #include <Aurie/shared.hpp>
+#pragma managed
 #pragma warning(disable : 4679)
+
+// A hack to prevent C++/CLI from complaining about missing type references (annoying warnings that cannot be disabled)
+namespace Aurie
+{
+	struct AurieModule {};
+};
 
 namespace AurieSharpInterop
 {
@@ -91,4 +99,18 @@ namespace AurieSharpInterop
 			[In] System::String^ Text
 		);
 	};	
+
+	public ref class AurieManagedModule sealed
+	{
+	internal:
+		static int m_NextFreeModId = 0;
+		int m_ModId;
+
+	public:
+		AurieManagedModule()
+		{
+			this->m_ModId = m_NextFreeModId;
+			m_NextFreeModId++;
+		}
+	};
 }

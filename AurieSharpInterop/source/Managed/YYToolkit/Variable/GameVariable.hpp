@@ -49,6 +49,7 @@ namespace YYTKInterop
 		virtual System::String^ ToString() override;
 		GameObject^ ToGameObject();
 		GameInstance^ ToGameInstance();
+		Gen::IReadOnlyList<GameVariable^>^ ToArrayView();
 
 		static operator double(GameVariable^ Variable);
 		static operator System::Int32(GameVariable^ Variable);
@@ -56,6 +57,7 @@ namespace YYTKInterop
 		static operator System::String^(GameVariable^ Variable);
 		static operator GameObject^(GameVariable^ Variable);
 		static operator GameInstance^ (GameVariable^ Variable);
+		static operator Gen::IReadOnlyList<GameVariable^>^ (GameVariable^ Variable);
 
 		bool TryGetInt32([Out] System::Int32% Value);
 		bool TryGetInt64([Out] System::Int64% Value);
@@ -63,6 +65,7 @@ namespace YYTKInterop
 		bool TryGetGameObject([Out] GameObject^% Value);
 		bool TryGetGameInstance([Out] GameInstance^% Value);
 		bool TryGetString([Out] System::String^% Value);
+		bool TryGetArrayView([Out] Gen::IReadOnlyList<GameVariable^>^% Value);
 
 		// Destructor - called only when modders use Dispose() or instance goes out of scope of a "using" block
 		~GameVariable();
@@ -81,8 +84,14 @@ namespace YYTKInterop
 
 		property GameVariable^ default[System::String^]
 		{
-			GameVariable^ get(System::String ^ name);
-			void set(System::String^ name, GameVariable ^ value);
+			GameVariable^ get(System::String^ Name);
+			void set(System::String^ Name, GameVariable^ Value);
+		}
+
+		property GameVariable^ default[int]
+		{
+			GameVariable^ get(int Index);
+			void set(int Index, GameVariable^ Value);
 		}
 	};
 }

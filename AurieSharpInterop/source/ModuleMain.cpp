@@ -55,8 +55,6 @@ EXPORTED AurieStatus ModulePreinitialize(
 
 	// Now set up YYTK hooks
 	YYTK::YYTKInterface* module_interface = YYTK::GetInterface();
-	
-	Sleep(5000);
 
 	if (!module_interface)
 	{
@@ -66,31 +64,6 @@ EXPORTED AurieStatus ModulePreinitialize(
 
 	module_interface->CreateCallback(Aurie::g_ArSelfModule, YYTK::EVENT_OBJECT_CALL, YYTKInterop::NativeObjectCallback, 0);
 	module_interface->CreateCallback(Aurie::g_ArSelfModule, YYTK::EVENT_FRAME, YYTKInterop::NativeFrameCallback, 0);
-
-	return AURIE_SUCCESS;
-}
-
-EXPORTED AurieStatus ModuleInitialize(
-	IN AurieModule* Module,
-	IN const fs::path& ModulePath
-)
-{
-	//// Now set up YYTK hooks
-	//YYTK::YYTKInterface* module_interface = YYTK::GetInterface();
-
-	//YYTK::CScript* gml_script_use_item = nullptr;
-	//module_interface->GetNamedRoutinePointer(
-	//	"gml_Script_use_item",
-	//	(PVOID*)&gml_script_use_item
-	//);
-
-	//MmCreateHook(
-	//	g_ArSelfModule,
-	//	"testhook",
-	//	gml_script_use_item->m_Functions->m_ScriptFunction,
-	//	YYTKInterop::NativeScriptHook,
-	//	nullptr
-	//);
 
 	return AURIE_SUCCESS;
 }

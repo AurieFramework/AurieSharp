@@ -143,6 +143,16 @@ namespace YYTKInterop
 		throw gcnew System::InvalidCastException("RValue is not castable to GameInstance!");
 	}
 
+	Gen::IReadOnlyList<GameVariable^>^ GameVariable::ToArrayView()
+	{
+		Gen::IReadOnlyList<GameVariable^>^ value = nullptr;
+		if (TryGetArrayView(value))
+			return value;
+
+		throw gcnew System::InvalidCastException("RValue is not castable to Array!");
+	}
+
+
 	GameVariable::operator double(GameVariable^ Variable)
 	{
 		return Variable->ToDouble();
@@ -171,6 +181,11 @@ namespace YYTKInterop
 	GameVariable::operator GameInstance^(GameVariable^ Variable)
 	{
 		return Variable->ToGameInstance();
+	}
+
+	GameVariable::operator Gen::IReadOnlyList<GameVariable^>^ (GameVariable^ Variable)
+	{
+		return Variable->ToArrayView();
 	}
 
 	bool GameVariable::TryGetInt32(System::Int32% Value)
@@ -231,6 +246,21 @@ namespace YYTKInterop
 		return true;
 	}
 
+	bool GameVariable::TryGetArrayView(Gen::IReadOnlyList<GameVariable^>^% Value)
+	{
+		if (!m_Value->IsArray())
+			return false;
+
+		auto native_array_vector = m_Value->ToVector();
+		auto managed_list = gcnew Gen::List<GameVariable^>(static_cast<int>(native_array_vector.size()));
+
+		for (size_t i = 0; i < native_array_vector.size(); i++)
+			managed_list->Add(GameVariable::CreateFromRValue(native_array_vector[i]));
+
+		Value = managed_list->AsReadOnly();
+		return true;
+	}
+
 	GameVariable::~GameVariable()
 	{
 		this->!GameVariable();
@@ -270,5 +300,29 @@ namespace YYTKInterop
 			throw gcnew System::InvalidCastException("Cannot access struct members of a non-struct variable!");
 
 		(*m_Value)[marshal_as<std::string>(Name)] = Value->ToRValue();
+	}
+
+	GameVariable^ GameVariable::default::get(int Index)
+	{
+		if (!m_Value->IsArray())
+			throw gcnew System::InvalidCastException("Cannot index a non-array variable!");
+
+		auto native_array = m_Value->ToVector();
+		if (Index >= native_array.size())
+			throw gcnew System::IndexOutOfRangeException("Cannot index past end of array RValue!");
+
+		return GameVariable::CreateFromRValue(native_array[Index]);
+	}
+
+	void GameVariable::default::set(int Index, GameVariable^ Value)
+	{
+		if (!m_Value->IsArray())
+			throw gcnew System::InvalidCastException("Cannot index a non-array variable!");
+
+		auto native_array = m_Value->ToRefVector();
+		if (Index >= native_array.size())
+			throw gcnew System::IndexOutOfRangeException("Cannot index past end of array RValue!");
+
+		*native_array[Index] = Value->ToRValue();
 	}
 }

@@ -1,8 +1,10 @@
 #pragma once
+#pragma unmanaged
 #include <YYToolkit/YYTK_Shared.hpp>
+#pragma managed
 #include "../Objects/GameObject.hpp"
 #include "../Variable/GameVariable.hpp"
-
+#include "../../Aurie/IAurie.hpp"
 
 namespace YYTKInterop
 {
@@ -65,8 +67,48 @@ namespace YYTKInterop
 
 		GameVariable^ GetResult();
 	};
+	public ref class CodeExecutionContext sealed
+	{
+	internal:
+		YYTK::YYObjectBase* m_SelfObject;
+		YYTK::YYObjectBase* m_OtherObject;
+		YYTK::CCode* m_Code;
+		int m_ArgumentCount;
+		YYTK::RValue* m_Arguments;
+		System::String^ m_Name;
 
-	public delegate void GameEventCallbackHandler(GameObject^ Self, GameObject^ Other);
+		CodeExecutionContext(std::string Name, YYTK::YYObjectBase* Self, YYTK::YYObjectBase* Other, YYTK::CCode* Code, int ArgumentCount, YYTK::RValue* Arguments) :
+			m_Name(gcnew System::String(Name.c_str())), m_SelfObject(Self), m_OtherObject(Other),
+			m_ArgumentCount(ArgumentCount), m_Arguments(Arguments)
+		{
+
+		}
+
+	public:
+		property GameObject^ Self
+		{
+			GameObject ^ get();
+		}
+
+		property GameObject^ Other
+		{
+			GameObject ^ get();
+		}
+
+		property Gen::IReadOnlyList<GameVariable^>^ Arguments
+		{
+			Gen::IReadOnlyList<GameVariable^> ^ get();
+		}
+
+		property System::String^ Name
+		{
+			System::String ^ get();
+		}
+
+		void OverrideArgument(int Index, GameVariable^ NewValue);
+	};
+
+	public delegate void GameEventCallbackHandler(CodeExecutionContext^ Context);
 	public delegate void FrameCallbackHandler(long FrameNumber, double DeltaTime);
 	public delegate void BeforeScriptCallbackHandler(ScriptExecutionContext^ Context);
 	public delegate void AfterScriptCallbackHandler(ScriptExecutionContext^ Context);
@@ -115,16 +157,27 @@ namespace YYTKInterop
 		ref class EventController sealed
 		{
 		internal:
-			Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>^ m_BeforeScriptHandlers;
-			Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>^ m_AfterScriptHandlers;
+			using _BeforeScriptDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>^>;
+			using _AfterScriptDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>^>;
+			
+			_BeforeScriptDict^ m_BeforeScriptHandlers;
+			_AfterScriptDict^ m_AfterScriptHandlers;
 
 			EventController() 
 			{
-				m_BeforeScriptHandlers = gcnew Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>(4);
-				m_AfterScriptHandlers = gcnew Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>(4);
+				m_BeforeScriptHandlers = gcnew _BeforeScriptDict(4);
+				m_AfterScriptHandlers = gcnew _AfterScriptDict(4);
 			}
 
-			void RaiseObjectEvent(YYTK::CInstance* Self, YYTK::CInstance* Other);
+			void RaiseObjectEvent(
+				std::string Name,
+				YYTK::CInstance* Self,
+				YYTK::CInstance* Other,
+				YYTK::CCode* CodeObject,
+				int ArgumentCount,
+				YYTK::RValue* Arguments
+			);
+
 			void RaiseFrameEvent(long FrameNumber, double DeltaTime);
 			void RaiseBeforeScriptEvent(
 				std::string Name, 
@@ -139,32 +192,68 @@ namespace YYTKInterop
 			void RaiseAfterScriptEvent(
 				std::string Name,
 				YYTK::RValue& Result,
-				YYTK::CInstance* Self, 
+				YYTK::CInstance* Self,
 				YYTK::CInstance* Other,
 				int ArgumentCount,
 				YYTK::RValue** Arguments
 			);
 
+			// Redirects a target script to NativeScriptHook
+			Aurie::AurieStatus AttachTargetScriptToNSH(
+				std::string ScriptName
+			);
+
+			Aurie::AurieStatus DetachTargetScriptFromNSH(
+				std::string ScriptName
+			);
+
+			bool GetOrCreateModScopedPreCallbackDict(
+				AurieSharpInterop::AurieManagedModule^ Module,
+				Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>^% Scripts
+			);
+
+			bool GetOrCreateModScopedPostCallbackDict(
+				AurieSharpInterop::AurieManagedModule^ Module,
+				Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>^% Scripts
+			);
+
+			void CheckRemoveUnusedPreScriptHooks(
+				System::String^ ScriptName
+			);
+
+			void CheckRemoveUnusedPostScriptHooks(
+				System::String^ ScriptName
+			);
+
 		public:
+
+			void RemoveAllScriptsForMod(
+				AurieSharpInterop::AurieManagedModule^ Module
+			);
+
 			event GameEventCallbackHandler^ OnGameEvent;
 			event FrameCallbackHandler^ OnFrame;
 
 			void AddPreScriptNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
 				System::String^ ScriptName,
 				BeforeScriptCallbackHandler^ NotifyHandler
 			);
 
 			void AddPostScriptNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
 				System::String^ ScriptName,
 				AfterScriptCallbackHandler^ NotifyHandler
 			);
 
 			void RemovePreScriptNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
 				System::String^ ScriptName,
 				BeforeScriptCallbackHandler^ NotifyHandler
 			);
 
 			void RemovePostScriptNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
 				System::String^ ScriptName,
 				AfterScriptCallbackHandler^ NotifyHandler
 			);

@@ -178,16 +178,8 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 				calling_instruction.text
 			);
 
-			TerminateProcess(GetCurrentProcess(), 1);
-			return Result;
+			exit(1);
 		}
-
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_TRACE,
-			"Restored register context for instruction %s => 0x%llX",
-			calling_instruction.text,
-			script_address
-		);
 	}
 
 	std::string hook_name;
@@ -206,8 +198,7 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 			calling_instruction.text
 		);
 
-		TerminateProcess(GetCurrentProcess(), last_status);
-		return Result;
+		exit(1);
 	}
 
 	YYTK::PFUNC_YYGMLScript original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name.c_str()));
@@ -220,18 +211,10 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 			calling_instruction.text
 		);
 
-		TerminateProcess(GetCurrentProcess(), last_status);
-		return Result;
+		exit(1);
 	}
 
 	bool was_script_cancelled = false;
-
-	DbgPrintEx(
-		Aurie::LOG_SEVERITY_INFO,
-		"Dispatch script %s => Self %p, Other %p, Result %p, Argc %d, Args %p",
-		hook_name.c_str(),
-		Self, Other, &Result, ArgumentCount, Arguments
-	);
 
 	RaiseManagedBeforeScriptEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments, was_script_cancelled);
 
