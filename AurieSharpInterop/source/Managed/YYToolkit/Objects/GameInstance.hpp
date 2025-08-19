@@ -6,6 +6,8 @@ namespace YYTKInterop
 {
 	using namespace System::Runtime::InteropServices;
 
+	ref class GameVariable;
+
 	// CInstance
 	public ref class GameInstance
 	{
@@ -42,5 +44,16 @@ namespace YYTKInterop
 		{
 			int get();
 		}
+
+		property Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ Members
+		{
+			Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ get();
+		}
+
+		property GameVariable^ default[System::String^]
+			{
+				GameVariable^ get(System::String ^ name);
+				void set(System::String ^ name, GameVariable ^ value);
+			}
 	};
 }

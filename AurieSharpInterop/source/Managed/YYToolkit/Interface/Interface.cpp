@@ -146,9 +146,58 @@ namespace YYTKInterop
 		);
 
 		if (!Aurie::AurieSuccess(last_status))
-			throw gcnew InvalidOperationException("Failed to call built-in function!");
+			throw gcnew InvalidOperationException("Failed to call game script!");
 
 		return GameVariable::CreateFromRValue(result);
+	}
+
+	GameRoom^ Game::EngineController::GetStaticRoom(int RoomId)
+	{
+		YYTK::CRoom* room = nullptr;
+		auto last_status = YYTK::GetInterface()->GetRoomData(
+			RoomId,
+			room
+		);
+
+		if (!Aurie::AurieSuccess(last_status))
+			throw gcnew ArgumentException("Attempted to fetch room with invalid index.");
+
+		return gcnew GameRoom(room);
+	}
+
+	GameRoom^ Game::EngineController::GetStaticRoom(String^ RoomName)
+	{
+		auto last_status = Aurie::AURIE_SUCCESS;
+		std::string room_name = marshal_as<std::string>(RoomName);
+
+		int index = 0;
+		do
+		{
+			YYTK::CRoom* room = nullptr;
+			last_status = YYTK::GetInterface()->GetRoomData(
+				index,
+				room
+			);
+
+			if (Aurie::AurieSuccess(last_status))
+				if (_stricmp(room_name.c_str(), room->m_Caption))
+					return gcnew GameRoom(room);
+
+			index++;
+		} while (Aurie::AurieSuccess(last_status));
+
+		throw gcnew ArgumentException("Attempted to fetch room with invalid name.");
+	}
+
+	GameRoom^ Game::EngineController::GetRunningRoom()
+	{
+		YYTK::CRoom* room = nullptr;
+		auto last_status = YYTK::GetInterface()->GetCurrentRoomData(room);
+
+		if (!Aurie::AurieSuccess(last_status))
+			throw gcnew InvalidOperationException("Failed to grab current room!");
+
+		return gcnew GameRoom(room);
 	}
 
 	void Game::EventController::RaiseObjectEvent(
@@ -210,7 +259,6 @@ namespace YYTKInterop
 				handler->Invoke(context);
 		}
 
-		// TODO: Find all modules hooked to Name, call delegates.
 		outOverridden = context->m_ResultOverridden;
 	}
 
@@ -238,6 +286,118 @@ namespace YYTKInterop
 			if (kv_pair.Value->TryGetValue(context->Name, handler))
 				handler->Invoke(context);
 		}
+	}
+
+	void Game::EventController::RaiseBeforeBuiltinEvent(
+		IN std::string BuiltinName,
+		OUT YYTK::RValue& Result, 
+		OPTIONAL IN YYTK::CInstance* Self,
+		OPTIONAL IN YYTK::CInstance* Other,
+		IN int ArgumentCount, 
+		OPTIONAL IN YYTK::RValue* Arguments,
+		OUT bool& Overridden
+	)
+	{
+		BuiltinExecutionContext^ context = gcnew BuiltinExecutionContext(
+			BuiltinName,
+			Result,
+			Self,
+			Other,
+			ArgumentCount,
+			Arguments
+		);
+
+		for each (auto kv_pair in m_BeforeBuiltinHandlers)
+		{
+			BeforeBuiltinCallbackHandler^ handler = nullptr;
+			if (kv_pair.Value->TryGetValue(context->Name, handler))
+				handler->Invoke(context);
+		}
+
+		Overridden = context->m_ResultOverridden;
+	}
+
+	void Game::EventController::RaiseAfterBuiltinEvent(
+		IN std::string BuiltinName, 
+		OUT YYTK::RValue& Result,
+		OPTIONAL IN YYTK::CInstance* Self,
+		OPTIONAL IN YYTK::CInstance* Other,
+		IN int ArgumentCount, 
+		OPTIONAL IN YYTK::RValue* Arguments
+	)
+	{
+		BuiltinExecutionContext^ context = gcnew BuiltinExecutionContext(
+			BuiltinName,
+			Result,
+			Self,
+			Other,
+			ArgumentCount,
+			Arguments
+		);
+
+		for each (auto kv_pair in m_AfterBuiltinHandlers)
+		{
+			AfterBuiltinCallbackHandler^ handler = nullptr;
+			if (kv_pair.Value->TryGetValue(context->Name, handler))
+				handler->Invoke(context);
+		}
+	}
+
+	Aurie::AurieStatus Game::EventController::AttachTargetBuiltinToNBH(
+		std::string BuiltinName
+	)
+	{
+		using namespace Aurie;
+		AurieStatus last_status = AURIE_SUCCESS;
+		YYTK::YYTKInterface* module_interface = YYTK::GetInterface();
+
+		// Check if the hook exists.
+		// If it does, we just return AURIE_SUCCESS, since MmHookExists finds it.
+		last_status = MmHookExists(g_ArSelfModule, BuiltinName.c_str());
+		if (AurieSuccess(last_status))
+			return last_status;
+
+		int function_index = 0;
+		last_status = module_interface->GetNamedRoutineIndex(
+			BuiltinName.c_str(),
+			&function_index
+		);
+
+		// Function indices < 100'000 are built-in functions.
+		// They also can't have indices below zero.
+		if (!AurieSuccess(last_status) || function_index < 0 || function_index >= 100'000)
+			return AURIE_OBJECT_NOT_FOUND;
+
+		// Get the CScript object.
+		YYTK::TRoutine routine = nullptr;
+		last_status = YYTK::GetInterface()->GetNamedRoutinePointer(
+			BuiltinName.c_str(),
+			reinterpret_cast<PVOID*>(&routine)
+		);
+
+		if (!AurieSuccess(last_status))
+			return last_status;
+
+		// Create the hook to attach the method to NSH
+		last_status = Aurie::MmCreateHook(
+			g_ArSelfModule,
+			BuiltinName,
+			routine,
+			NativeBuiltinHookEntry,
+			nullptr
+		);
+
+		return last_status;
+	}
+
+	Aurie::AurieStatus Game::EventController::DetachTargetBuiltinFromNBH(
+		std::string BuiltinName
+	)
+	{
+		return Aurie::MmRemoveHook(
+			Aurie::g_ArSelfModule,
+			BuiltinName
+		);
 	}
 
 	Aurie::AurieStatus Game::EventController::AttachTargetScriptToNSH(
@@ -276,7 +436,6 @@ namespace YYTKInterop
 			return last_status;
 
 		// Create the hook to attach the method to NSH
-		// TODO: Probably see if the hook is created?
 		last_status = Aurie::MmCreateHook(
 			g_ArSelfModule,
 			ScriptName,
@@ -298,7 +457,7 @@ namespace YYTKInterop
 		);
 	}
 
-	bool Game::EventController::GetOrCreateModScopedPreCallbackDict(
+	bool Game::EventController::GetOrCreateModScopedPreScriptCallbackDict(
 		AurieSharpInterop::AurieManagedModule^ Module, 
 		Gen::Dictionary<String^, BeforeScriptCallbackHandler^>^% Scripts
 	)
@@ -309,7 +468,7 @@ namespace YYTKInterop
 		return m_BeforeScriptHandlers->TryGetValue(Module, Scripts);
 	}
 
-	bool Game::EventController::GetOrCreateModScopedPostCallbackDict(
+	bool Game::EventController::GetOrCreateModScopedPostScriptCallbackDict(
 		AurieSharpInterop::AurieManagedModule^ Module, 
 		Gen::Dictionary<String^, AfterScriptCallbackHandler^>^% Scripts
 	)
@@ -320,7 +479,31 @@ namespace YYTKInterop
 		return m_AfterScriptHandlers->TryGetValue(Module, Scripts);
 	}
 
-	void Game::EventController::CheckRemoveUnusedPreScriptHooks(System::String^ ScriptName)
+	bool Game::EventController::GetOrCreateModScopedPreBuiltinCallbackDict(
+		AurieSharpInterop::AurieManagedModule^ Module, 
+		Gen::Dictionary<System::String^, BeforeBuiltinCallbackHandler^>^% Builtins
+	)
+	{
+		if (!m_BeforeBuiltinHandlers->ContainsKey(Module))
+			m_BeforeBuiltinHandlers->Add(Module, gcnew Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>(0));
+
+		return m_BeforeBuiltinHandlers->TryGetValue(Module, Builtins);
+	}
+
+	bool Game::EventController::GetOrCreateModScopedPostBuiltinCallbackDict(
+		AurieSharpInterop::AurieManagedModule^ Module,
+		Gen::Dictionary<System::String^, AfterBuiltinCallbackHandler^>^% Builtins
+	)
+	{
+		if (!m_AfterBuiltinHandlers->ContainsKey(Module))
+			m_AfterBuiltinHandlers->Add(Module, gcnew Gen::Dictionary<String^, AfterBuiltinCallbackHandler^>(0));
+
+		return m_AfterBuiltinHandlers->TryGetValue(Module, Builtins);
+	}
+
+	bool Game::EventController::IsScriptHooked(
+		System::String^ ScriptName
+	)
 	{
 		bool script_in_use = false;
 		for each (auto kv_pair in m_BeforeScriptHandlers)
@@ -332,15 +515,6 @@ namespace YYTKInterop
 			}
 		}
 
-		if (script_in_use)
-			return;
-
-		DetachTargetScriptFromNSH(marshal_as<std::string>(ScriptName));
-	}
-
-	void Game::EventController::CheckRemoveUnusedPostScriptHooks(System::String^ ScriptName)
-	{
-		bool script_in_use = false;
 		for each (auto kv_pair in m_AfterScriptHandlers)
 		{
 			if (kv_pair.Value->ContainsKey(ScriptName))
@@ -350,25 +524,107 @@ namespace YYTKInterop
 			}
 		}
 
-		if (script_in_use)
-			return;
-
-		DetachTargetScriptFromNSH(marshal_as<std::string>(ScriptName));
+		return script_in_use;
 	}
 
-	void Game::EventController::RemoveAllScriptsForMod(
+	bool Game::EventController::IsBuiltinHooked(
+		System::String^ BuiltinName
+	)
+	{
+		bool builtin_in_use = false;
+		for each (auto kv_pair in m_BeforeBuiltinHandlers)
+		{
+			if (kv_pair.Value->ContainsKey(BuiltinName))
+			{
+				builtin_in_use = true;
+				break;
+			}
+		}
+
+		for each (auto kv_pair in m_BeforeBuiltinHandlers)
+		{
+			if (kv_pair.Value->ContainsKey(BuiltinName))
+			{
+				builtin_in_use = true;
+				break;
+			}
+		}
+
+		return builtin_in_use;
+	}
+
+	void Game::EventController::DetachScriptIfUnused(
+		String^ ScriptName
+	)
+	{
+		if (!IsScriptHooked(ScriptName))
+			DetachTargetScriptFromNSH(marshal_as<std::string>(ScriptName));
+	}
+
+	void Game::EventController::DetachBuiltinIfUnused(
+		System::String^ BuiltinName
+	)
+	{
+		if (!IsScriptHooked(BuiltinName))
+			DetachTargetScriptFromNSH(marshal_as<std::string>(BuiltinName));
+	}
+
+	void Game::EventController::RemoveAllBuiltinHooksForMod(
 		AurieSharpInterop::AurieManagedModule^ Module
 	)
 	{
-		Gen::List<System::String^>^ before_script_dict_keys = gcnew Gen::List<System::String^>(4);
-		Gen::List<System::String^>^ after_script_dict_keys = gcnew Gen::List<System::String^>(4);
+		Gen::List<String^>^ before_builtin_dict_keys = gcnew Gen::List<String^>(4);
+		Gen::List<String^>^ after_builtin_dict_keys = gcnew Gen::List<String^>(4);
+
+		Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>^ before_builtin_dict = nullptr;
+		Gen::Dictionary<String^, AfterBuiltinCallbackHandler^>^ after_builtin_dict = nullptr;
+
+		if (m_BeforeBuiltinHandlers->TryGetValue(Module, before_builtin_dict))
+		{
+			// Loop to store all keys in a native vector (and null the entry)
+			for each (auto kv_pair in before_builtin_dict)
+				before_builtin_dict_keys->Add(kv_pair.Key);
+
+			// Actually remove all the entries
+			for each (auto name in before_builtin_dict_keys)
+			{
+				before_builtin_dict->Remove(name);
+				DetachBuiltinIfUnused(name);
+			}
+
+			m_BeforeBuiltinHandlers->Remove(Module);
+		}
+
+		if (m_AfterBuiltinHandlers->TryGetValue(Module, after_builtin_dict))
+		{
+			// Loop to store all keys in a native vector (and null the entry)
+			for each (auto kv_pair in after_builtin_dict)
+				after_builtin_dict_keys->Add(kv_pair.Key);
+
+			// Actually remove all the entries
+			for each (auto name in after_builtin_dict_keys)
+			{
+				after_builtin_dict->Remove(name);
+				DetachBuiltinIfUnused(name);
+			}
+
+			m_AfterBuiltinHandlers->Remove(Module);
+		}
+	}
+
+	void Game::EventController::RemoveAllScriptHooksForMod(
+		AurieSharpInterop::AurieManagedModule^ Module
+	)
+	{
+		Gen::List<String^>^ before_script_dict_keys = gcnew Gen::List<String^>(4);
+		Gen::List<String^>^ after_script_dict_keys = gcnew Gen::List<String^>(4);
 
 		Gen::Dictionary<String^, BeforeScriptCallbackHandler^>^ before_script_dict = nullptr;
 		Gen::Dictionary<String^, AfterScriptCallbackHandler^>^ after_script_dict = nullptr;
 
 		if (m_BeforeScriptHandlers->TryGetValue(Module, before_script_dict))
 		{
-			// Loop to store all keys in a native vector (and null the entry
+			// Loop to store all keys in a native vector (and null the entry)
 			for each (auto kv_pair in before_script_dict)
 				before_script_dict_keys->Add(kv_pair.Key);
 
@@ -376,7 +632,7 @@ namespace YYTKInterop
 			for each (auto name in before_script_dict_keys)
 			{
 				before_script_dict->Remove(name);
-				CheckRemoveUnusedPreScriptHooks(name);
+				DetachScriptIfUnused(name);
 			}
 
 			m_BeforeScriptHandlers->Remove(Module);
@@ -384,7 +640,7 @@ namespace YYTKInterop
 
 		if (m_AfterScriptHandlers->TryGetValue(Module, after_script_dict))
 		{
-			// Loop to store all keys in a native vector (and null the entry
+			// Loop to store all keys in a native vector (and null the entry)
 			for each (auto kv_pair in after_script_dict)
 				after_script_dict_keys->Add(kv_pair.Key);
 
@@ -392,7 +648,7 @@ namespace YYTKInterop
 			for each (auto name in after_script_dict_keys)
 			{
 				after_script_dict->Remove(name);
-				CheckRemoveUnusedPostScriptHooks(name);
+				DetachScriptIfUnused(name);
 			}
 				
 			m_AfterScriptHandlers->Remove(Module);
@@ -412,7 +668,7 @@ namespace YYTKInterop
 			throw gcnew InvalidOperationException("Failed to attach to script!");
 
 		Gen::Dictionary<String^, BeforeScriptCallbackHandler^>^ script_list = nullptr;
-		if (GetOrCreateModScopedPreCallbackDict(CurrentModule, script_list))
+		if (GetOrCreateModScopedPreScriptCallbackDict(CurrentModule, script_list))
 		{
 			BeforeScriptCallbackHandler^ existing_handler = nullptr;
 			script_list->TryGetValue(ScriptName, existing_handler);
@@ -438,7 +694,7 @@ namespace YYTKInterop
 			throw gcnew InvalidOperationException("Failed to attach to script!");
 
 		Gen::Dictionary<String^, AfterScriptCallbackHandler^>^ script_list = nullptr;
-		if (GetOrCreateModScopedPostCallbackDict(CurrentModule, script_list))
+		if (GetOrCreateModScopedPostScriptCallbackDict(CurrentModule, script_list))
 		{
 			AfterScriptCallbackHandler^ existing_handler = nullptr;
 			script_list->TryGetValue(ScriptName, existing_handler);
@@ -458,7 +714,7 @@ namespace YYTKInterop
 	)
 	{
 		Gen::Dictionary<String^, BeforeScriptCallbackHandler^>^ script_list = nullptr;
-		if (!GetOrCreateModScopedPreCallbackDict(CurrentModule, script_list))
+		if (!GetOrCreateModScopedPreScriptCallbackDict(CurrentModule, script_list))
 			return; // Nothing for this module
 
 		BeforeScriptCallbackHandler^ existing_handler = nullptr;
@@ -477,7 +733,7 @@ namespace YYTKInterop
 		if (script_list->Count == 0)
 			m_BeforeScriptHandlers->Remove(CurrentModule);
 
-		CheckRemoveUnusedPreScriptHooks(ScriptName);
+		DetachScriptIfUnused(ScriptName);
 	}
 
 	void Game::EventController::RemovePostScriptNotification(
@@ -487,7 +743,7 @@ namespace YYTKInterop
 	)
 	{
 		Gen::Dictionary<String^, AfterScriptCallbackHandler^>^ script_list = nullptr;
-		if (!GetOrCreateModScopedPostCallbackDict(CurrentModule, script_list))
+		if (!GetOrCreateModScopedPostScriptCallbackDict(CurrentModule, script_list))
 			return; // Nothing for this module
 
 		AfterScriptCallbackHandler^ existing_handler = nullptr;
@@ -506,7 +762,117 @@ namespace YYTKInterop
 		if (script_list->Count == 0)
 			m_BeforeScriptHandlers->Remove(CurrentModule);
 
-		CheckRemoveUnusedPostScriptHooks(ScriptName);
+		DetachScriptIfUnused(ScriptName);
+	}
+
+	void Game::EventController::AddPreBuiltinNotification(
+		AurieSharpInterop::AurieManagedModule^ CurrentModule, 
+		System::String^ BuiltinName, 
+		BeforeBuiltinCallbackHandler^ NotifyHandler
+	)
+	{
+		std::string script_name = marshal_as<std::string>(BuiltinName);
+
+		auto last_status = AttachTargetBuiltinToNBH(script_name);
+		if (!Aurie::AurieSuccess(last_status))
+			throw gcnew InvalidOperationException("Failed to attach to script!");
+
+		Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>^ script_list = nullptr;
+		if (GetOrCreateModScopedPreBuiltinCallbackDict(CurrentModule, script_list))
+		{
+			BeforeBuiltinCallbackHandler^ existing_handler = nullptr;
+			script_list->TryGetValue(BuiltinName, existing_handler);
+
+			auto combined = static_cast<BeforeBuiltinCallbackHandler^>(
+				Delegate::Combine(existing_handler, NotifyHandler)
+			);
+
+			script_list[BuiltinName] = combined;
+		}
+	}
+
+	void Game::EventController::AddPostBuiltinNotification(
+		AurieSharpInterop::AurieManagedModule^ CurrentModule,
+		System::String^ BuiltinName,
+		AfterBuiltinCallbackHandler^ NotifyHandler
+	)
+	{
+		std::string script_name = marshal_as<std::string>(BuiltinName);
+
+		auto last_status = AttachTargetBuiltinToNBH(script_name);
+		if (!Aurie::AurieSuccess(last_status))
+			throw gcnew InvalidOperationException("Failed to attach to script!");
+
+		Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>^ builtin_list = nullptr;
+		if (GetOrCreateModScopedPreBuiltinCallbackDict(CurrentModule, builtin_list))
+		{
+			BeforeBuiltinCallbackHandler^ existing_handler = nullptr;
+			builtin_list->TryGetValue(BuiltinName, existing_handler);
+
+			auto combined = static_cast<BeforeBuiltinCallbackHandler^>(
+				Delegate::Combine(existing_handler, NotifyHandler)
+				);
+
+			builtin_list[BuiltinName] = combined;
+		}
+	}
+
+	void Game::EventController::RemovePreBuiltinNotification(
+		AurieSharpInterop::AurieManagedModule^ CurrentModule,
+		System::String^ BuiltinName,
+		BeforeBuiltinCallbackHandler^ NotifyHandler
+	)
+	{
+		Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>^ builtin_list = nullptr;
+		if (!GetOrCreateModScopedPreBuiltinCallbackDict(CurrentModule, builtin_list))
+			return; // Nothing for this module
+
+		BeforeBuiltinCallbackHandler^ existing_handler = nullptr;
+		if (!builtin_list->TryGetValue(BuiltinName, existing_handler))
+			return; // Script not registered for this module
+
+		auto new_handler = static_cast<BeforeBuiltinCallbackHandler^>(
+			Delegate::RemoveAll(existing_handler, NotifyHandler)
+			);
+
+		if (new_handler == nullptr)
+			builtin_list->Remove(BuiltinName);
+		else
+			builtin_list[BuiltinName] = new_handler;
+
+		if (builtin_list->Count == 0)
+			m_BeforeBuiltinHandlers->Remove(CurrentModule);
+
+		DetachBuiltinIfUnused(BuiltinName);
+	}
+
+	void Game::EventController::RemovePostBuiltinNotification(
+		AurieSharpInterop::AurieManagedModule^ CurrentModule,
+		System::String^ BuiltinName,
+		AfterBuiltinCallbackHandler^ NotifyHandler
+	)
+	{
+		Gen::Dictionary<String^, AfterBuiltinCallbackHandler^>^ builtin_list = nullptr;
+		if (!GetOrCreateModScopedPostBuiltinCallbackDict(CurrentModule, builtin_list))
+			return; // Nothing for this module
+
+		AfterBuiltinCallbackHandler^ existing_handler = nullptr;
+		if (!builtin_list->TryGetValue(BuiltinName, existing_handler))
+			return; // Script not registered for this module
+
+		auto new_handler = static_cast<AfterBuiltinCallbackHandler^>(
+			Delegate::RemoveAll(existing_handler, NotifyHandler)
+			);
+
+		if (new_handler == nullptr)
+			builtin_list->Remove(BuiltinName);
+		else
+			builtin_list[BuiltinName] = new_handler;
+
+		if (builtin_list->Count == 0)
+			m_AfterBuiltinHandlers->Remove(CurrentModule);
+
+		DetachBuiltinIfUnused(BuiltinName);
 	}
 
 	GameObject^ ScriptExecutionContext::Self::get()
@@ -592,6 +958,55 @@ namespace YYTKInterop
 			throw gcnew IndexOutOfRangeException("Invalid index provided to OverrideArgument!");
 
 		this->m_Arguments[Index] = NewValue->ToRValue();
+	}
+
+	String^ BuiltinExecutionContext::Name::get()
+	{
+		return m_Name;
+	}
+
+	GameObject^ BuiltinExecutionContext::Self::get()
+	{
+		return gcnew GameObject(m_SelfObject);
+	}
+
+	GameObject^ BuiltinExecutionContext::Other::get()
+	{
+		return gcnew GameObject(m_OtherObject);
+	}
+
+	Gen::IReadOnlyList<GameVariable^>^ BuiltinExecutionContext::Arguments::get()
+	{
+		auto list = gcnew Gen::List<GameVariable^>(this->m_ArgumentCount);
+
+		for (int i = 0; i < m_ArgumentCount; i++)
+			list->Add(GameVariable::CreateFromRValue(m_Arguments[i]));
+
+		return list->AsReadOnly();
+	}
+
+	void BuiltinExecutionContext::OverrideArgument(
+		int Index,
+		GameVariable^ NewValue
+	)
+	{
+		if (Index < 0 || Index > m_ArgumentCount)
+			throw gcnew IndexOutOfRangeException("Invalid index provided to OverrideArgument!");
+
+		this->m_Arguments[Index] = NewValue->ToRValue();
+	}
+
+	void BuiltinExecutionContext::OverrideResult(
+		GameVariable^ NewValue
+	)
+	{
+		m_Result = NewValue->ToRValue();
+		m_ResultOverridden = true;
+	}
+
+	GameVariable^ BuiltinExecutionContext::GetResult()
+	{
+		return GameVariable::CreateFromRValue(m_Result);
 	}
 }
 

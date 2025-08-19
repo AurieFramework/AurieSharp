@@ -33,6 +33,11 @@ namespace YYTKInterop
 		InitializeFromRValue(YYTK::RValue());
 	}
 
+	GameVariable::GameVariable(bool Value)
+	{
+		InitializeFromRValue(YYTK::RValue(Value));
+	}
+
 	GameVariable::GameVariable(System::Int32 Value)
 	{
 		InitializeFromRValue(YYTK::RValue(Value));
@@ -62,6 +67,11 @@ namespace YYTKInterop
 	{
 		// Note: This is okay, since YYCreateString (RV_CreateFromString internals) copy it to a GM-owned buffer.
 		InitializeFromRValue(YYTK::RValue(marshal_as<std::string>(Value).c_str()));
+	}
+
+	GameVariable::operator GameVariable ^ (bool Value)
+	{
+		return gcnew GameVariable(Value);
 	}
 
 	GameVariable::operator GameVariable ^ (System::Int32 Value)
@@ -105,6 +115,24 @@ namespace YYTKInterop
 			return value;
 
 		throw gcnew System::InvalidCastException("RValue is not castable to Int64!");
+	}
+
+	bool GameVariable::ToBoolean()
+	{
+		bool value = 0;
+		if (TryGetBoolean(value))
+			return value;
+
+		throw gcnew System::InvalidCastException("RValue is not castable to Boolean!");
+	}
+
+	float GameVariable::ToFloat()
+	{
+		float value = 0;
+		if (TryGetFloat(value))
+			return value;
+
+		throw gcnew System::InvalidCastException("RValue is not castable to Float!");
 	}
 
 	double GameVariable::ToDouble()
@@ -152,6 +180,15 @@ namespace YYTKInterop
 		throw gcnew System::InvalidCastException("RValue is not castable to Array!");
 	}
 
+	GameVariable::operator bool(GameVariable^ Variable)
+	{
+		return Variable->ToBoolean();
+	}
+
+	GameVariable::operator float(GameVariable^ Variable)
+	{
+		return Variable->ToFloat();
+	}
 
 	GameVariable::operator double(GameVariable^ Variable)
 	{
@@ -206,6 +243,24 @@ namespace YYTKInterop
 		return true;
 	}
 
+	bool GameVariable::TryGetBoolean(bool% Value)
+	{
+		if (!m_Value->IsNumberConvertible())
+			return false;
+
+		Value = m_Value->ToBoolean();
+		return true;
+	}
+
+	bool GameVariable::TryGetFloat(float% Value)
+	{
+		if (!m_Value->IsNumberConvertible())
+			return false;
+
+		Value = static_cast<float>(m_Value->ToDouble());
+		return true;
+	}
+
 	bool GameVariable::TryGetDouble(double% Value)
 	{
 		if (!m_Value->IsNumberConvertible())
@@ -239,8 +294,17 @@ namespace YYTKInterop
 
 	bool GameVariable::TryGetString(System::String^% Value)
 	{
-		if (!m_Value->IsString())
+		// YYTK can safely convert all these types to strings!
+		if (!m_Value->IsString() &&
+			!m_Value->IsNumberConvertible() &&
+			!m_Value->IsStruct() &&
+			!m_Value->ToArray() &&
+			!m_Value->IsUndefined() &&
+			m_Value->m_Kind != YYTK::VALUE_REF
+		)
+		{
 			return false;
+		}
 
 		Value = gcnew System::String(m_Value->ToCString());
 		return true;
@@ -279,6 +343,17 @@ namespace YYTKInterop
 
 	System::String^ GameVariable::Type::get()
 	{
+		if (m_Value->m_Kind == YYTK::VALUE_OBJECT)
+		{
+			std::string rvalue_kind_name = YYTK::GetPrivateInterface()->RV_GetKindName(m_Value);
+			std::string rvalue_specific_kind_name = YYTK::GetPrivateInterface()->RV_GetObjectSpecificKind(m_Value);
+
+			if (!_stricmp(rvalue_kind_name.c_str(), rvalue_specific_kind_name.c_str()))
+				return gcnew System::String(m_Value->GetKindName().c_str());
+
+			return gcnew System::String(std::format("{} {}", rvalue_kind_name, rvalue_specific_kind_name).c_str());
+		}
+
 		return gcnew System::String(m_Value->GetKindName().c_str());
 	}
 
@@ -324,5 +399,21 @@ namespace YYTKInterop
 			throw gcnew System::IndexOutOfRangeException("Cannot index past end of array RValue!");
 
 		*native_array[Index] = Value->ToRValue();
+	}
+
+	Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ GameVariable::Members::get()
+	{
+		std::map<std::string, YYTK::RValue*> my_map = m_Value->ToRefMap();
+
+		auto managed_map = gcnew Gen::Dictionary<System::String^, GameVariable^>(static_cast<int>(my_map.size()));
+
+		for (const auto& [Key, Value] : my_map)
+		{
+			System::String^ key = gcnew System::String(Key.c_str());
+			GameVariable^ value = GameVariable::CreateFromRValue(*Value);
+			managed_map->Add(key, value);
+		}
+
+		return managed_map;
 	}
 }

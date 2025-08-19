@@ -3,6 +3,7 @@ PTR_SIZE equ 8h
 
 extern g_RegisterState:QWORD
 extern NativeScriptHook:PROC
+extern NativeBuiltinHook:PROC
 
 .code
 	; https://github.com/Archie-osu/ZenHv/blob/main/source/asm/vm.asm
@@ -55,4 +56,10 @@ extern NativeScriptHook:PROC
 		PUSHREGS
 		jmp NativeScriptHook
 	NativeScriptHookEntry endp
+
+	NativeBuiltinHookEntry proc
+		lea rax, g_RegisterState
+		PUSHREGS
+		jmp NativeBuiltinHook
+	NativeBuiltinHookEntry endp
 end

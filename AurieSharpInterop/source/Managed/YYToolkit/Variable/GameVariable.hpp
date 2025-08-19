@@ -20,6 +20,9 @@ namespace YYTKInterop
 		// Creates a VALUE_UNDEFINED RValue
 		GameVariable();
 
+		// Creates a VALUE_BOOL RValue
+		GameVariable(bool Value);
+
 		// Creates a VALUE_INT64 RValue
 		GameVariable(System::Int32 Value);
 
@@ -37,6 +40,7 @@ namespace YYTKInterop
 		GameVariable(System::String^ Value);
 
 		// Implicit conversions such that C# can do GameVariable var = "string" for example
+		static operator GameVariable ^ (bool Value);
 		static operator GameVariable ^ (System::Int32 Value);
 		static operator GameVariable ^ (System::Int64 Value);
 		static operator GameVariable ^ (GameObject^ Value);
@@ -45,12 +49,16 @@ namespace YYTKInterop
 
 		System::Int32 ToInt32();
 		System::Int64 ToInt64();
+		bool ToBoolean();
+		float ToFloat();
 		double ToDouble();
 		virtual System::String^ ToString() override;
 		GameObject^ ToGameObject();
 		GameInstance^ ToGameInstance();
 		Gen::IReadOnlyList<GameVariable^>^ ToArrayView();
 
+		static operator bool(GameVariable^ Variable);
+		static operator float(GameVariable^ Variable);
 		static operator double(GameVariable^ Variable);
 		static operator System::Int32(GameVariable^ Variable);
 		static operator System::Int64(GameVariable^ Variable);
@@ -61,6 +69,8 @@ namespace YYTKInterop
 
 		bool TryGetInt32([Out] System::Int32% Value);
 		bool TryGetInt64([Out] System::Int64% Value);
+		bool TryGetBoolean([Out] bool% Value);
+		bool TryGetFloat([Out] float% Value);
 		bool TryGetDouble([Out] double% Value);
 		bool TryGetGameObject([Out] GameObject^% Value);
 		bool TryGetGameInstance([Out] GameInstance^% Value);
@@ -92,6 +102,11 @@ namespace YYTKInterop
 		{
 			GameVariable^ get(int Index);
 			void set(int Index, GameVariable^ Value);
+		}
+
+		property Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ Members
+		{
+			Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ get();
 		}
 	};
 }

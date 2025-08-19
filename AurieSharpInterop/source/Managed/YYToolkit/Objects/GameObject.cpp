@@ -13,7 +13,15 @@ namespace YYTKInterop
 
 	System::String^ GameObject::Name::get()
 	{
-		return gcnew System::String("Object");
+		YYTK::RValue value = this->m_Object;
+
+		std::string rvalue_kind_name = YYTK::GetPrivateInterface()->RV_GetKindName(&value);
+		std::string rvalue_specific_kind_name = YYTK::GetPrivateInterface()->RV_GetObjectSpecificKind(&value);
+
+		if (!_stricmp(rvalue_kind_name.c_str(), rvalue_specific_kind_name.c_str()))
+			return gcnew System::String(value.GetKindName().c_str());
+
+		return gcnew System::String(std::format("{} {}", rvalue_kind_name, rvalue_specific_kind_name).c_str());
 	}
 
 	Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ GameObject::Members::get()

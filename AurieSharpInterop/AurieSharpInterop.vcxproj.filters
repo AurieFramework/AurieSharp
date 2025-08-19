@@ -42,7 +42,10 @@
     <ClCompile Include="include\MemoryUtils\MemoryUtils.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
-    <ClCompile Include="source\Managed\YYToolkit\Interface\NativeScriptHook.cpp">
+    <ClCompile Include="source\Managed\YYToolkit\Objects\GameRoom.cpp">
+      <Filter>Zdrojové soubory</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Managed\YYToolkit\Native Hooks\NativeHooks.cpp">
       <Filter>Zdrojové soubory</Filter>
     </ClCompile>
   </ItemGroup>
@@ -86,9 +89,15 @@
     <ClInclude Include="include\MemoryUtils\MemoryUtils.hpp">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>
+    <ClInclude Include="source\Managed\YYToolkit\Objects\GameRoom.hpp">
+      <Filter>Hlavičkové soubory</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ZenHv\ZenHv.hpp">
+      <Filter>Hlavičkové soubory</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="source\Managed\YYToolkit\Interface\NativeScriptHookAsm.asm">
+    <MASM Include="source\Managed\YYToolkit\Native Hooks\NativeHookEntry.asm">
       <Filter>Zdrojové soubory</Filter>
     </MASM>
   </ItemGroup>

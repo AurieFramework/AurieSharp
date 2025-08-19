@@ -176,9 +176,10 @@
     </ClCompile>
     <ClCompile Include="source\Managed\Aurie\IAurie.cpp" />
     <ClCompile Include="source\Managed\YYToolkit\Interface\Interface.cpp" />
-    <ClCompile Include="source\Managed\YYToolkit\Interface\NativeScriptHook.cpp" />
+    <ClCompile Include="source\Managed\YYToolkit\Native Hooks\NativeHooks.cpp" />
     <ClCompile Include="source\Managed\YYToolkit\Objects\GameInstance.cpp" />
     <ClCompile Include="source\Managed\YYToolkit\Objects\GameObject.cpp" />
+    <ClCompile Include="source\Managed\YYToolkit\Objects\GameRoom.cpp" />
     <ClCompile Include="source\Managed\YYToolkit\Variable\GameVariable.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
   </ItemGroup>
@@ -190,15 +191,17 @@
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Base.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Interface.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Types.hpp" />
+    <ClInclude Include="include\ZenHv\ZenHv.hpp" />
     <ClInclude Include="include\Zydis\Zydis.h" />
     <ClInclude Include="source\Managed\Aurie\IAurie.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Interface\Interface.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Objects\GameInstance.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Objects\GameObject.hpp" />
+    <ClInclude Include="source\Managed\YYToolkit\Objects\GameRoom.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Variable\GameVariable.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="source\Managed\YYToolkit\Interface\NativeScriptHookAsm.asm" />
+    <MASM Include="source\Managed\YYToolkit\Native Hooks\NativeHookEntry.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

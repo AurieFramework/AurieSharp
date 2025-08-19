@@ -38,7 +38,7 @@ namespace AurieSharpInterop
 		return System::IntPtr(interface_ptr);
 	}
 
-	void Framework::GetVersion(
+	void Framework::GetAurieVersion(
 		[Out] short% Major,
 		[Out] short% Minor,
 		[Out] short% Patch
@@ -55,20 +55,35 @@ namespace AurieSharpInterop
 		);
 	}
 
-	void Debug::Print(
+	void Framework::GetInteropVersion(short% Major, short% Minor, short% Patch)
+	{
+		Major = 1;
+		Minor = 0;
+		Patch = 0;
+	}
+
+	void Framework::Print(
 		[In] System::String^ Text
 	)
 	{
 		std::string native_string = marshal_as<std::string>(Text);
 		return Aurie::DbgPrint(native_string.c_str());
 	}
-
-	void Debug::PrintEx(
+	
+	void Framework::PrintEx(
 		[In] AurieLogSeverity Severity, 
 		[In] System::String^ Text
 	)
 	{
 		std::string native_string = marshal_as<std::string>(Text);
 		return Aurie::DbgPrintEx(static_cast<Aurie::AurieLogSeverity>(Severity), native_string.c_str());
+	}
+
+	AurieStatus Framework::LoadNativeModule(System::String^ ModulePath)
+	{
+		std::string native_path = marshal_as<std::string>(ModulePath);
+		Aurie::AurieModule* module = nullptr;
+
+		return static_cast<AurieStatus>(Aurie::MdMapImage(native_path, module));
 	}
 }

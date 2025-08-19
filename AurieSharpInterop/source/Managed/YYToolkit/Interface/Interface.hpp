@@ -4,6 +4,7 @@
 #pragma managed
 #include "../Objects/GameObject.hpp"
 #include "../Variable/GameVariable.hpp"
+#include "../Objects/GameRoom.hpp"
 #include "../../Aurie/IAurie.hpp"
 
 namespace YYTKInterop
@@ -13,6 +14,7 @@ namespace YYTKInterop
 
 	void NativeObjectCallback(IN YYTK::FWCodeEvent& CodeEvent);
 	void NativeFrameCallback(IN YYTK::FWFrame& FrameEvent);
+	
 	extern "C" YYTK::RValue& NativeScriptHook(
 		IN YYTK::CInstance* Self,
 		IN YYTK::CInstance* Other,
@@ -20,7 +22,17 @@ namespace YYTKInterop
 		IN int ArgumentCount,
 		IN YYTK::RValue** Arguments
 	);
+
+	extern "C" void NativeBuiltinHook(
+		OUT YYTK::RValue& Result,
+		OPTIONAL IN YYTK::CInstance* Self,
+		OPTIONAL IN YYTK::CInstance* Other,
+		IN int ArgumentCount,
+		OPTIONAL IN YYTK::RValue* Arguments
+	);
+
 	extern "C" void NativeScriptHookEntry();
+	extern "C" void NativeBuiltinHookEntry();
 
 	public ref class ScriptExecutionContext sealed
 	{
@@ -108,10 +120,58 @@ namespace YYTKInterop
 		void OverrideArgument(int Index, GameVariable^ NewValue);
 	};
 
+	public ref class BuiltinExecutionContext sealed
+	{
+	internal:
+		YYTK::RValue& m_Result;
+		YYTK::YYObjectBase* m_SelfObject;
+		YYTK::YYObjectBase* m_OtherObject;
+		int m_ArgumentCount;
+		YYTK::RValue* m_Arguments;
+		bool m_ResultOverridden;
+		System::String^ m_Name;
+
+		BuiltinExecutionContext(std::string Name, YYTK::RValue& Result, YYTK::YYObjectBase* Self, YYTK::YYObjectBase* Other, int ArgumentCount, YYTK::RValue* Arguments) :
+			m_Name(gcnew System::String(Name.c_str())), m_SelfObject(Self), m_OtherObject(Other),
+			m_ArgumentCount(ArgumentCount), m_Arguments(Arguments), m_Result(Result)
+		{
+
+		}
+
+	public:
+		property GameObject^ Self
+		{
+			GameObject^ get();
+		}
+
+		property GameObject^ Other
+		{
+			GameObject^ get();
+		}
+
+		property Gen::IReadOnlyList<GameVariable^>^ Arguments
+		{
+			Gen::IReadOnlyList<GameVariable^>^ get();
+		}
+
+		property System::String^ Name
+		{
+			System::String^ get();
+		}
+
+		void OverrideArgument(int Index, GameVariable^ NewValue);
+
+		void OverrideResult(GameVariable^ NewValue);
+
+		GameVariable^ GetResult();
+	};
+
 	public delegate void GameEventCallbackHandler(CodeExecutionContext^ Context);
 	public delegate void FrameCallbackHandler(long FrameNumber, double DeltaTime);
 	public delegate void BeforeScriptCallbackHandler(ScriptExecutionContext^ Context);
 	public delegate void AfterScriptCallbackHandler(ScriptExecutionContext^ Context);
+	public delegate void BeforeBuiltinCallbackHandler(BuiltinExecutionContext^ Context);
+	public delegate void AfterBuiltinCallbackHandler(BuiltinExecutionContext^ Context);
 
 	// YYTKInterface
 	public ref class Game abstract sealed
@@ -152,6 +212,19 @@ namespace YYTKInterop
 				GameObject^ Other,
 				... array<GameVariable^>^ Arguments
 			);
+
+			// GetRoomData
+			GameRoom^ GetStaticRoom(
+				int RoomId
+			);
+
+			// GetRoomData but wrapped
+			GameRoom^ GetStaticRoom(
+				System::String^ RoomName
+			);
+
+			// GetCurrentRoomData
+			GameRoom^ GetRunningRoom();
 		};
 
 		ref class EventController sealed
@@ -159,14 +232,22 @@ namespace YYTKInterop
 		internal:
 			using _BeforeScriptDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>^>;
 			using _AfterScriptDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>^>;
-			
+			using _BeforeBuiltinDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, BeforeBuiltinCallbackHandler^>^>;
+			using _AfterBuiltinDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, AfterBuiltinCallbackHandler^>^>;
+
+
 			_BeforeScriptDict^ m_BeforeScriptHandlers;
 			_AfterScriptDict^ m_AfterScriptHandlers;
+			_BeforeBuiltinDict^ m_BeforeBuiltinHandlers;
+			_AfterBuiltinDict^ m_AfterBuiltinHandlers;
 
 			EventController() 
 			{
 				m_BeforeScriptHandlers = gcnew _BeforeScriptDict(4);
 				m_AfterScriptHandlers = gcnew _AfterScriptDict(4);
+
+				m_BeforeBuiltinHandlers = gcnew _BeforeBuiltinDict(4);
+				m_AfterBuiltinHandlers = gcnew _AfterBuiltinDict(4);
 			}
 
 			void RaiseObjectEvent(
@@ -198,6 +279,33 @@ namespace YYTKInterop
 				YYTK::RValue** Arguments
 			);
 
+			void RaiseBeforeBuiltinEvent(
+				IN std::string BuiltinName,
+				OUT YYTK::RValue& Result,
+				OPTIONAL IN YYTK::CInstance* Self,
+				OPTIONAL IN YYTK::CInstance* Other,
+				IN int ArgumentCount,
+				OPTIONAL IN YYTK::RValue* Arguments,
+				OUT bool& Overridden
+			);
+
+			void RaiseAfterBuiltinEvent(
+				IN std::string BuiltinName,
+				OUT YYTK::RValue& Result,
+				OPTIONAL IN YYTK::CInstance* Self,
+				OPTIONAL IN YYTK::CInstance* Other,
+				IN int ArgumentCount,
+				OPTIONAL IN YYTK::RValue* Arguments
+			);
+
+			Aurie::AurieStatus AttachTargetBuiltinToNBH(
+				std::string BuiltinName
+			);
+
+			Aurie::AurieStatus DetachTargetBuiltinFromNBH(
+				std::string BuiltinName
+			);
+
 			// Redirects a target script to NativeScriptHook
 			Aurie::AurieStatus AttachTargetScriptToNSH(
 				std::string ScriptName
@@ -207,27 +315,48 @@ namespace YYTKInterop
 				std::string ScriptName
 			);
 
-			bool GetOrCreateModScopedPreCallbackDict(
+			bool GetOrCreateModScopedPreScriptCallbackDict(
 				AurieSharpInterop::AurieManagedModule^ Module,
 				Gen::Dictionary<System::String^, BeforeScriptCallbackHandler^>^% Scripts
 			);
 
-			bool GetOrCreateModScopedPostCallbackDict(
+			bool GetOrCreateModScopedPostScriptCallbackDict(
 				AurieSharpInterop::AurieManagedModule^ Module,
 				Gen::Dictionary<System::String^, AfterScriptCallbackHandler^>^% Scripts
 			);
 
-			void CheckRemoveUnusedPreScriptHooks(
+			bool GetOrCreateModScopedPreBuiltinCallbackDict(
+				AurieSharpInterop::AurieManagedModule^ Module,
+				Gen::Dictionary<System::String^, BeforeBuiltinCallbackHandler^>^% Builtins
+			);
+
+			bool GetOrCreateModScopedPostBuiltinCallbackDict(
+				AurieSharpInterop::AurieManagedModule^ Module,
+				Gen::Dictionary<System::String^, AfterBuiltinCallbackHandler^>^% Builtins
+			);
+
+			bool IsScriptHooked(
 				System::String^ ScriptName
 			);
 
-			void CheckRemoveUnusedPostScriptHooks(
+			bool IsBuiltinHooked(
+				System::String^ BuiltinName
+			);
+
+			void DetachScriptIfUnused(
 				System::String^ ScriptName
+			);
+
+			void DetachBuiltinIfUnused(
+				System::String^ BuiltinName
 			);
 
 		public:
+			void RemoveAllBuiltinHooksForMod(
+				AurieSharpInterop::AurieManagedModule^ Module
+			);
 
-			void RemoveAllScriptsForMod(
+			void RemoveAllScriptHooksForMod(
 				AurieSharpInterop::AurieManagedModule^ Module
 			);
 
@@ -257,12 +386,34 @@ namespace YYTKInterop
 				System::String^ ScriptName,
 				AfterScriptCallbackHandler^ NotifyHandler
 			);
-		};
 
+			void AddPreBuiltinNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
+				System::String^ BuiltinName,
+				BeforeBuiltinCallbackHandler^ NotifyHandler
+			);
+
+			void AddPostBuiltinNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
+				System::String^ BuiltinName,
+				AfterBuiltinCallbackHandler^ NotifyHandler
+			);
+
+			void RemovePreBuiltinNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
+				System::String^ BuiltinName,
+				BeforeBuiltinCallbackHandler^ NotifyHandler
+			);
+
+			void RemovePostBuiltinNotification(
+				AurieSharpInterop::AurieManagedModule^ CurrentModule,
+				System::String^ BuiltinName,
+				AfterBuiltinCallbackHandler^ NotifyHandler
+			);
+		};
 	private:
 		static EngineController^ s_Engine = gcnew EngineController();
 		static EventController^ s_Events = gcnew EventController();
-
 	public:
 		static property EngineController^ Engine
 		{

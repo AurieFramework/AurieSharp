@@ -1,6 +1,8 @@
 ﻿using AurieSharpInterop;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Windows.Markup;
 using YYTKInterop;
 
 namespace AurieSharpManaged
@@ -23,7 +25,7 @@ namespace AurieSharpManaged
             foreach (var type in m_LoadAssembly.GetTypes())
             {
                 // Look for a public, static InitializeMod routine.
-                var method = type.GetMethod(Name, BindingFlags.Static | BindingFlags.Public);
+                var method = type.GetMethod(Name, Flags);
 
                 // If the InitializeMod routine either:
                 // - Does not exist
@@ -56,15 +58,16 @@ namespace AurieSharpManaged
         }
         public AurieStatus Load()
         {
+            using var fs = File.Open(m_Path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
             m_LoadContext = new($"ASMContext_{m_Path}", true);
-            m_LoadAssembly = m_LoadContext.LoadFromAssemblyPath(m_Path);
+            m_LoadAssembly = m_LoadContext.LoadFromStream(fs);
 
             MethodInfo? initialize_method = LocateMethod("InitializeMod", BindingFlags.Static | BindingFlags.Public, (PotentialMethod) => 
             {
                 // InitializeMod should return AurieStatus.
                 if (PotentialMethod.ReturnType != typeof(AurieStatus))
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an InitializeMod routine, but it does not return AurieStatus!"
                     );
@@ -75,7 +78,7 @@ namespace AurieSharpManaged
                 // InitializeMod should take 1 parameter.
                 if (PotentialMethod.GetParameters().Length != 1)
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an InitializeMod routine, but it doesn't take 1 argument!"
                     );
@@ -86,7 +89,7 @@ namespace AurieSharpManaged
                 // That one parameter should be a AurieManagedModule type.
                 if (PotentialMethod.GetParameters()[0].ParameterType != typeof(AurieManagedModule))
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an InitializeMod routine, but it doesn't take 1 argument!"
                     );
@@ -101,7 +104,7 @@ namespace AurieSharpManaged
                 // UnloadMod should return void.
                 if (PotentialMethod.ReturnType != typeof(void))
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it does not return AurieStatus!"
                     );
@@ -112,7 +115,7 @@ namespace AurieSharpManaged
                 // UnloadMod should take 1 parameter.
                 if (PotentialMethod.GetParameters().Length != 1)
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it doesn't take 1 argument!"
                     );
@@ -123,7 +126,7 @@ namespace AurieSharpManaged
                 // That one parameter should be a AurieManagedModule type.
                 if (PotentialMethod.GetParameters()[0].ParameterType != typeof(AurieManagedModule))
                 {
-                    Debug.PrintEx(
+                    Framework.PrintEx(
                         AurieLogSeverity.Warning,
                         $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it doesn't take 1 argument!"
                     );
@@ -135,10 +138,16 @@ namespace AurieSharpManaged
             });
 
             if (initialize_method is null)
+            {
+                Framework.PrintEx(AurieLogSeverity.Trace, "[ASM] initialize_method is null!");
                 return AurieStatus.VerificationFailure;
+            }
 
             if (unload_method is null)
+            {
+                Framework.PrintEx(AurieLogSeverity.Trace, "[ASM] unload_method is null!");
                 return AurieStatus.VerificationFailure;
+            }
 
             // Initialize an array because wtf?
             AurieManagedModule[] arguments_array = { m_ManagedModule };
@@ -152,7 +161,7 @@ namespace AurieSharpManaged
             }
 
             m_Loaded = true;
-            return (AurieStatus)init_result;
+            return init_result.Value;
         }
 
         public AurieStatus Unload(bool Notify)
@@ -168,7 +177,7 @@ namespace AurieSharpManaged
                     // UnloadMod should return void.
                     if (PotentialMethod.ReturnType != typeof(void))
                     {
-                        Debug.PrintEx(
+                        Framework.PrintEx(
                             AurieLogSeverity.Warning,
                             $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it does not return AurieStatus!"
                         );
@@ -179,7 +188,7 @@ namespace AurieSharpManaged
                     // UnloadMod should take 1 parameter.
                     if (PotentialMethod.GetParameters().Length != 1)
                     {
-                        Debug.PrintEx(
+                        Framework.PrintEx(
                             AurieLogSeverity.Warning,
                             $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it doesn't take 1 argument!"
                         );
@@ -190,7 +199,7 @@ namespace AurieSharpManaged
                     // That one parameter should be a AurieManagedModule type.
                     if (PotentialMethod.GetParameters()[0].ParameterType != typeof(AurieManagedModule))
                     {
-                        Debug.PrintEx(
+                        Framework.PrintEx(
                             AurieLogSeverity.Warning,
                             $"[ASM] Assembly {m_LoadAssembly.GetName()} contains an UnloadMod routine, but it doesn't take 1 argument!"
                         );
@@ -204,18 +213,11 @@ namespace AurieSharpManaged
                     unload_method.Invoke(null, new AurieManagedModule[] { m_ManagedModule });
             }
 
-            Game.Events.RemoveAllScriptsForMod(m_ManagedModule);
+            Game.Events.RemoveAllScriptHooksForMod(m_ManagedModule);
+            Game.Events.RemoveAllBuiltinHooksForMod(m_ManagedModule);
 
             m_LoadContext.Unload();
-
-            m_LoadContext = null;
-            m_LoadAssembly = null;
-
             m_Loaded = false;
-
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect(); // often done twice to be sure
 
             return AurieStatus.Success;
         }

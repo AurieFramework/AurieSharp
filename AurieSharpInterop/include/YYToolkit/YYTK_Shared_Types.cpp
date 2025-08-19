@@ -228,28 +228,28 @@ YYTK::RValue::RValue(
 
 RValue& YYTK::RValue::operator[](
 	IN size_t Index
-)
+	)
 {
 	return *GetPrivateInterface()->RV_IndexByNumberRef(this, Index);
 }
 
 RValue YYTK::RValue::operator[](
 	IN size_t Index
-) const
+	) const
 {
 	return GetPrivateInterface()->RV_IndexByNumber(this, Index);
 }
 
 RValue& RValue::operator[](
 	IN std::string_view Element
-)
+	)
 {
 	return *GetPrivateInterface()->RV_IndexByNameRef(this, Element);
 }
 
 RValue YYTK::RValue::operator[](
 	IN std::string_view MemberName
-) const
+	) const
 {
 	return GetPrivateInterface()->RV_IndexByName(this, MemberName);
 }

@@ -79,17 +79,18 @@ namespace AurieSharpInterop
 			[In] System::String^ Name
 		);
 
-		static void GetVersion(
+		static void GetAurieVersion(
 			[Out] short% Major,
 			[Out] short% Minor,
 			[Out] short% Patch
 		);
-	};
 
-	// Contains methods for logging data into Aurie.log and the console.
-	public ref class Debug abstract sealed
-	{
-	public:
+		static void GetInteropVersion(
+			[Out] short% Major,
+			[Out] short% Minor,
+			[Out] short% Patch
+		);
+
 		static void Print(
 			[In] System::String^ Text
 		);
@@ -98,7 +99,11 @@ namespace AurieSharpInterop
 			[In] AurieLogSeverity Severity,
 			[In] System::String^ Text
 		);
-	};	
+
+		static AurieStatus LoadNativeModule(
+			[In] System::String^ ModulePath
+		);
+	};
 
 	public ref class AurieManagedModule sealed
 	{

@@ -1,4 +1,5 @@
 #include "GameInstance.hpp"
+#include "../Variable/GameVariable.hpp"
 #include <msclr/marshal_cppstd.h>
 
 using namespace System;
@@ -35,13 +36,15 @@ namespace YYTKInterop
 
 	String^ GameInstance::Name::get()
 	{
-		// Try to get the owning object
-		auto owning_object = GetNativeInstance()->m_Object;
+		YYTK::RValue value = this->m_Object;
 
-		if (!owning_object || !owning_object->m_Name)
-			return gcnew String("Instance");
+		std::string rvalue_kind_name = YYTK::GetPrivateInterface()->RV_GetKindName(&value);
+		std::string rvalue_specific_kind_name = YYTK::GetPrivateInterface()->RV_GetObjectSpecificKind(&value);
 
-		return gcnew String(owning_object->m_Name);
+		if (!_stricmp(rvalue_kind_name.c_str(), rvalue_specific_kind_name.c_str()))
+			return gcnew System::String(value.GetKindName().c_str());
+
+		return gcnew System::String(std::format("{} {}", rvalue_kind_name, rvalue_specific_kind_name).c_str());
 	}
 
 	double GameInstance::X::get()
@@ -88,5 +91,40 @@ namespace YYTKInterop
 			throw gcnew InvalidOperationException("Failed to get ID!");
 
 		return id.ToInt32();
+	}
+
+	Gen::IReadOnlyDictionary<System::String^, GameVariable^>^ GameInstance::Members::get()
+	{
+		YYTK::RValue my_struct = this->m_Object;
+		std::map<std::string, YYTK::RValue*> my_map = my_struct.ToRefMap();
+
+		auto managed_map = gcnew Gen::Dictionary<System::String^, GameVariable^>(static_cast<int>(my_map.size()));
+
+		for (const auto& [Key, Value] : my_map)
+		{
+			System::String^ key = gcnew System::String(Key.c_str());
+			GameVariable^ value = GameVariable::CreateFromRValue(*Value);
+			managed_map->Add(key, value);
+		}
+
+		return managed_map;
+	}
+
+	GameVariable^ GameInstance::default::get(System::String^ Name)
+	{
+		YYTK::RValue self = YYTK::RValue(this->m_Object);
+
+		YYTK::RValue* native_value = self.GetRefMember(marshal_as<std::string>(Name));
+		if (!native_value)
+			throw gcnew System::InvalidCastException("Cannot access non-existing member of a struct variable!");
+
+		return GameVariable::CreateFromRValue(*native_value);
+	}
+
+	void GameInstance::default::set(System::String^ Name, GameVariable^ Value)
+	{
+		YYTK::RValue self = YYTK::RValue(this->m_Object);
+
+		self[marshal_as<std::string>(Name)] = Value->ToRValue();
 	}
 }
