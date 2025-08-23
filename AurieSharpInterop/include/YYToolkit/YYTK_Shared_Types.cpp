@@ -259,7 +259,7 @@ bool YYTK::RValue::ContainsValue(
 ) const
 {
 	RValue self = *this;
-	return GetPrivateInterface()->RV_IndexByNameRef(&self, MemberName) != nullptr;
+	return GetPrivateInterface()->RV_ContainsNestedValue(this, MemberName);
 }
 
 YYTK::RValue::operator bool()
@@ -389,9 +389,8 @@ bool YYTK::CInstance::ContainsValue(
 	IN std::string_view MemberName
 ) const
 {
-	const RValue* member = this->GetRefMember(MemberName.data());
-
-	return member != nullptr;
+	RValue self = this;
+	return GetPrivateInterface()->RV_ContainsNestedValue(&self, MemberName);
 }
 
 CInstance* YYTK::CInstance::FromInstanceID(
