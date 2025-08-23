@@ -235,6 +235,8 @@ namespace YYTKInterop
 			using _BeforeBuiltinDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, BeforeBuiltinCallbackHandler^>^>;
 			using _AfterBuiltinDict = Gen::Dictionary<AurieSharpInterop::AurieManagedModule^, Gen::Dictionary<System::String^, AfterBuiltinCallbackHandler^>^>;
 
+			Gen::List<System::String^>^ m_AttachedScripts;
+			Gen::List<System::String^>^ m_AttachedBuiltins;
 
 			_BeforeScriptDict^ m_BeforeScriptHandlers;
 			_AfterScriptDict^ m_AfterScriptHandlers;
@@ -248,6 +250,9 @@ namespace YYTKInterop
 
 				m_BeforeBuiltinHandlers = gcnew _BeforeBuiltinDict(4);
 				m_AfterBuiltinHandlers = gcnew _AfterBuiltinDict(4);
+
+				m_AttachedScripts = gcnew Gen::List<System::String^>(4);
+				m_AttachedBuiltins = gcnew Gen::List<System::String^>(4);
 			}
 
 			void RaiseObjectEvent(

@@ -10,7 +10,7 @@ extern NativeBuiltinHook:PROC
 	; Saves all GPRs in a format expected by VmxRegisters struct.
 	; Assumes that RAX contains the address of a VmxRegisters structure.
 	PUSHREGS macro
-		mov [rax + PTR_SIZE * 0], rax
+		; Don't save RAX
 		mov [rax + PTR_SIZE * 1], rbx
 		mov [rax + PTR_SIZE * 2], rcx
 		mov [rax + PTR_SIZE * 3], rdx
@@ -52,12 +52,16 @@ extern NativeBuiltinHook:PROC
 	endm
 
 	NativeScriptHookEntry proc
+		; Save RAX manually
+		mov [g_RegisterState], rax
 		lea rax, g_RegisterState
 		PUSHREGS
 		jmp NativeScriptHook
 	NativeScriptHookEntry endp
 
 	NativeBuiltinHookEntry proc
+		; Save RAX manually
+		mov [g_RegisterState], rax
 		lea rax, g_RegisterState
 		PUSHREGS
 		jmp NativeBuiltinHook

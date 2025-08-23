@@ -387,6 +387,9 @@ namespace YYTKInterop
 			nullptr
 		);
 
+		if (AurieSuccess(last_status))
+			m_AttachedBuiltins->Add(gcnew System::String(BuiltinName.c_str()));
+
 		return last_status;
 	}
 
@@ -394,6 +397,8 @@ namespace YYTKInterop
 		std::string BuiltinName
 	)
 	{
+		m_AttachedBuiltins->Remove(gcnew System::String(BuiltinName.c_str()));
+
 		return Aurie::MmRemoveHook(
 			Aurie::g_ArSelfModule,
 			BuiltinName
@@ -444,6 +449,9 @@ namespace YYTKInterop
 			nullptr
 		);
 
+		if (AurieSuccess(last_status))
+			m_AttachedScripts->Add(gcnew System::String(ScriptName.c_str()));
+
 		return last_status;
 	}
 
@@ -451,6 +459,8 @@ namespace YYTKInterop
 		std::string ScriptName
 	)
 	{
+		m_AttachedScripts->Remove(gcnew System::String(ScriptName.c_str()));
+
 		return Aurie::MmRemoveHook(
 			Aurie::g_ArSelfModule,
 			ScriptName

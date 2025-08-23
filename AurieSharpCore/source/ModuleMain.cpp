@@ -13,8 +13,9 @@ EXPORTED AurieStatus ModuleEntrypoint(
 	if (!AurieSuccess(last_status))
 	{
 		DbgPrintEx(LOG_SEVERITY_ERROR, "Failed to load AurieSharpManaged.dll");
-		return last_status;
 	}
+
+	return last_status;
 }
 
 EXPORTED AurieStatus ModuleInitialize(

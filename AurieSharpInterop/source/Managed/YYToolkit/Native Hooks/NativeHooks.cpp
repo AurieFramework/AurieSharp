@@ -3,6 +3,11 @@
 #include <vector>
 #include <MemoryUtils/MemoryUtils.hpp>
 #include <ZenHv/ZenHv.hpp>
+#include <msclr/marshal_cppstd.h>
+
+using namespace msclr::interop;
+
+EXPORTED inline VmxRegisters g_RegisterState = {};
 
 #pragma managed
 static void RaiseManagedBeforeScriptEvent(
@@ -55,71 +60,86 @@ static void RaiseManagedAfterBuiltinEvent(
 	YYTKInterop::Game::Events->RaiseAfterBuiltinEvent(BuiltinName, Result, Self, Other, ArgumentCount, Arguments);
 }
 
-#pragma unmanaged
-
-EXPORTED inline VmxRegisters g_RegisterState = {};
-
-// Handles retarded fucking stupid instructions
-bool HandleFuckedInstruction(
-	IN ZydisDisassembledInstruction Instruction,
-	OUT ZyanU64& AssumedRegisterValue
+std::string GetCurrentHookName(
+	IN System::Collections::Generic::List<System::String^>^ HookList
 )
 {
-	if (Instruction.info.mnemonic == ZYDIS_MNEMONIC_CALL)
+	using namespace Aurie;
+
+	// Since we store all registers, and the hook stores all registers, they will match exactly for our hook call.
+	// So we can just loop all our hooks, and see which matches.
+	// 
+	// We loop the hooks that we know we placed...
+	for each (auto script in HookList)
 	{
-		if (Instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
+		// Convert to an unmanaged string
+		std::string hook_name = marshal_as<std::string>(script);
+
+		// Get the current hook
+		AurieObject* object = Internal::MmpGetHookByName(
+			g_ArSelfModule,
+			hook_name
+		);
+
+		// Check the object type for the hook - I think it's safe to assume 
+		// that it's an RP hook since ASI doesn't do any other hooks, but still, better to be safe.
+		if (Internal::ObpGetObjectType(object) != AURIE_OBJECT_RP_HOOK)
 		{
-			switch (ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, Instruction.operands[0].reg.value))
-			{
-			case ZYDIS_REGISTER_RAX:
-			case ZYDIS_REGISTER_RSP:
-			case ZYDIS_REGISTER_RBP:
-				return false;
-			case ZYDIS_REGISTER_RBX:
-				AssumedRegisterValue = g_RegisterState.RBX;
-				return true;
-			case ZYDIS_REGISTER_RCX:
-				AssumedRegisterValue = g_RegisterState.RCX;
-				return true;
-			case ZYDIS_REGISTER_RDX:
-				AssumedRegisterValue = g_RegisterState.RDX;
-				return true;
-			case ZYDIS_REGISTER_RSI:
-				AssumedRegisterValue = g_RegisterState.RSI;
-				return true;
-			case ZYDIS_REGISTER_RDI:
-				AssumedRegisterValue = g_RegisterState.RDI;
-				return true;
-			case ZYDIS_REGISTER_R8:
-				AssumedRegisterValue = g_RegisterState.R8;
-				return true;
-			case ZYDIS_REGISTER_R9:
-				AssumedRegisterValue = g_RegisterState.R9;
-				return true;
-			case ZYDIS_REGISTER_R10:
-				AssumedRegisterValue = g_RegisterState.R10;
-				return true;
-			case ZYDIS_REGISTER_R11:
-				AssumedRegisterValue = g_RegisterState.R11;
-				return true;
-			case ZYDIS_REGISTER_R12:
-				AssumedRegisterValue = g_RegisterState.R12;
-				return true;
-			case ZYDIS_REGISTER_R13:
-				AssumedRegisterValue = g_RegisterState.R13;
-				return true;
-			case ZYDIS_REGISTER_R14:
-				AssumedRegisterValue = g_RegisterState.R14;
-				return true;
-			case ZYDIS_REGISTER_R15:
-				AssumedRegisterValue = g_RegisterState.R15;
-				return true;
-			}
+			continue;
+		}
+
+		// Get the captured registers for our hook
+		ProcessorContext context = {};
+		auto script_hook = reinterpret_cast<AurieRpHook*>(object);
+		if (!AurieSuccess(Internal::MmpGetRegistersForRPHook(
+			script_hook,
+			context
+		)))
+		{
+			continue;
+		}
+
+		// We don't compare RSP, RBP, and RIP, since our g_RegisterState doesn't have it.
+		if ((context.RAX == g_RegisterState.RAX) &&
+			(context.RBX == g_RegisterState.RBX) &&
+			(context.RCX == g_RegisterState.RCX) &&
+			(context.RDX == g_RegisterState.RDX) &&
+			(context.RSI == g_RegisterState.RSI) &&
+			(context.RDI == g_RegisterState.RDI) &&
+			(context.R8 == g_RegisterState.R8) &&
+			(context.R9 == g_RegisterState.R9) &&
+			(context.R10 == g_RegisterState.R10) &&
+			(context.R11 == g_RegisterState.R11) &&
+			(context.R12 == g_RegisterState.R12) &&
+			(context.R13 == g_RegisterState.R13) &&
+			(context.R14 == g_RegisterState.R14) &&
+			(context.R15 == g_RegisterState.R15)
+			)
+		{
+			return hook_name;
 		}
 	}
 
-	return false;
+	DbgPrintEx(
+		Aurie::LOG_SEVERITY_CRITICAL,
+		"[ASI] No hook matches current processor state!"
+	);
+
+	YYTK::GetInterface()->GetRunnerInterface().YYError("[ASI] Failed to find correct hook.");
+	return "";
 }
+
+std::string GetCurrentHookNameScript()
+{
+	return GetCurrentHookName(YYTKInterop::Game::Events->m_AttachedScripts);
+}
+
+std::string GetCurrentHookNameBuiltin()
+{
+	return GetCurrentHookName(YYTKInterop::Game::Events->m_AttachedBuiltins);
+}
+
+#pragma unmanaged
 
 extern "C" void YYTKInterop::NativeBuiltinHook(
 	OUT YYTK::RValue& Result,
@@ -129,102 +149,18 @@ extern "C" void YYTKInterop::NativeBuiltinHook(
 	OPTIONAL IN YYTK::RValue* Arguments
 )
 {
-	// Terrible hack ahead!
-	// Uses return address to act as a disassembly point, then finds original address of calling script.
-	uintptr_t my_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
-
-	// Decode instructions "some number of bytes" before our return address.
-	// Experimenting with lower values may yield speedups, at the cost of accurate disassembly.
-	constexpr ptrdiff_t size_to_disassemble = 0x20;
-	ZyanU64 decoded_last_instruction = 0;
-	auto instructions = YYTK::Memory::DmDecodeInstructionByRange(
-		reinterpret_cast<PVOID>(my_caller - size_to_disassemble),
-		size_to_disassemble,
-		&decoded_last_instruction
-	);
-
-	if (instructions.empty())
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to disassemble for %llX",
-			my_caller
-		);
-
-		exit(1);
-	}
-
-	// Parameters to DmDecodeInstructionByRange specify that we end disassembly at the return address.
-	// This means that the last instruction in the instructions vector is the one that caused CF transfer to us.
-	// We know that because the return address always points to the instruction *after* a CF-transferring instruction.
-	//
-	// We get complete disassembly of this instruction.
-	auto calling_instruction = YYTK::Memory::DmDisassembleInstruction(
-		reinterpret_cast<PVOID>(decoded_last_instruction - instructions.back().length)
-	);
-
-	ZyanU64 builtin_address = 0;
-	ZydisCalcAbsoluteAddress(
-		&calling_instruction.info,
-		&calling_instruction.operands[0],
-		calling_instruction.runtime_address,
-		&builtin_address
-	);
-
-	if (!builtin_address)
-	{
-		if (!HandleFuckedInstruction(calling_instruction, builtin_address))
-		{
-			DbgPrintEx(
-				Aurie::LOG_SEVERITY_CRITICAL,
-				"Failed to find target address for instruction %s",
-				calling_instruction.text
-			);
-
-			exit(1);
-		}
-	}
-
-	std::string hook_name;
-	Aurie::AurieStatus last_status = Aurie::Internal::MmpLookupInlineHookBySourceAddress(
-		Aurie::g_ArSelfModule,
-		reinterpret_cast<PVOID>(builtin_address),
-		hook_name
-	);
-
-	if (!Aurie::AurieSuccess(last_status))
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to find hook for address %llX (instruction determined: %s)",
-			builtin_address,
-			calling_instruction.text
-		);
-
-		exit(1);
-	}
-
-	auto original = reinterpret_cast<YYTK::TRoutine>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name.c_str()));
-	if (!original)
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to find hook for address %llX (instruction determined: %s)",
-			builtin_address,
-			calling_instruction.text
-		);
-
-		exit(1);
-	}
+	std::string hook_name = GetCurrentHookNameBuiltin();
+	auto original = reinterpret_cast<YYTK::TRoutine>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name));
 
 	bool was_builtin_cancelled = false;
+
 	RaiseManagedBeforeBuiltinEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments, was_builtin_cancelled);
 
 	if (was_builtin_cancelled)
 		return;
 
 	original(Result, Self, Other, ArgumentCount, Arguments);
-	
+
 	RaiseManagedAfterBuiltinEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments);
 }
 
@@ -236,93 +172,8 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 	IN YYTK::RValue** Arguments
 )
 {
-	// Terrible hack ahead!
-	// Uses return address to act as a disassembly point, then finds original address of calling script.
-	uintptr_t my_caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
-
-	// Decode instructions "some number of bytes" before our return address.
-	// Experimenting with lower values may yield speedups, at the cost of accurate disassembly.
-	constexpr ptrdiff_t size_to_disassemble = 0x20;
-	ZyanU64 decoded_last_instruction = 0;
-	auto instructions = YYTK::Memory::DmDecodeInstructionByRange(
-		reinterpret_cast<PVOID>(my_caller - size_to_disassemble),
-		size_to_disassemble,
-		&decoded_last_instruction
-	);
-
-	if (instructions.empty())
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to disassemble for %llX",
-			my_caller
-		);
-
-		exit(1);
-	}
-
-	// Parameters to DmDecodeInstructionByRange specify that we end disassembly at the return address.
-	// This means that the last instruction in the instructions vector is the one that caused CF transfer to us.
-	// We know that because the return address always points to the instruction *after* a CF-transferring instruction.
-	//
-	// We get complete disassembly of this instruction.
-	auto calling_instruction = YYTK::Memory::DmDisassembleInstruction(
-		reinterpret_cast<PVOID>(decoded_last_instruction - instructions.back().length)
-	);
-
-	ZyanU64 script_address = 0;
-	ZydisCalcAbsoluteAddress(
-		&calling_instruction.info,
-		&calling_instruction.operands[0],
-		calling_instruction.runtime_address,
-		&script_address
-	);
-
-	if (!script_address)
-	{
-		if (!HandleFuckedInstruction(calling_instruction, script_address))
-		{
-			DbgPrintEx(
-				Aurie::LOG_SEVERITY_CRITICAL,
-				"Failed to find target address for instruction %s",
-				calling_instruction.text
-			);
-
-			exit(1);
-		}
-	}
-
-	std::string hook_name;
-	Aurie::AurieStatus last_status = Aurie::Internal::MmpLookupInlineHookBySourceAddress(
-		Aurie::g_ArSelfModule,
-		reinterpret_cast<PVOID>(script_address),
-		hook_name
-	);
-
-	if (!Aurie::AurieSuccess(last_status))
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to find hook for address %llX (instruction determined: %s)",
-			script_address,
-			calling_instruction.text
-		);
-
-		exit(1);
-	}
-
-	auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name.c_str()));
-	if (!original)
-	{
-		DbgPrintEx(
-			Aurie::LOG_SEVERITY_CRITICAL,
-			"Failed to find hook for address %llX (instruction determined: %s)",
-			script_address,
-			calling_instruction.text
-		);
-
-		exit(1);
-	}
+	std::string hook_name = GetCurrentHookNameScript();
+	auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name));
 
 	bool was_script_cancelled = false;
 
