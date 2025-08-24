@@ -378,7 +378,12 @@ namespace YYTKInterop
 		if (!AurieSuccess(last_status))
 			return last_status;
 
-		// Create the hook to attach the method to NSH
+		// Enter a lockdown.
+		// We don't want a race to happen in the time it takes us
+		// to add the entry to m_AttachedBuiltins.
+		EnterLockdown();
+
+		// Create the hook to attach the method to NBH
 		last_status = Aurie::MmCreateHook(
 			g_ArSelfModule,
 			BuiltinName,
@@ -390,6 +395,9 @@ namespace YYTKInterop
 		if (AurieSuccess(last_status))
 			m_AttachedBuiltins->Add(gcnew System::String(BuiltinName.c_str()));
 
+		// Leave the lockdown with everything set up.
+		LeaveLockdown();
+
 		return last_status;
 	}
 
@@ -397,12 +405,32 @@ namespace YYTKInterop
 		std::string BuiltinName
 	)
 	{
-		m_AttachedBuiltins->Remove(gcnew System::String(BuiltinName.c_str()));
+		// Enter a lockdown - all hooks must leave.
+		EnterLockdown();
 
-		return Aurie::MmRemoveHook(
+		// Disable the hook. Do not outright remove it here.
+		// This is because a thread may have re-entered after the lockdown was triggered, and is currently waiting for us.
+		//
+		// Disabling the hook is safe, and prevents any new entries from happening.
+		Aurie::MmDisableHook(Aurie::g_ArSelfModule, BuiltinName);
+
+		// Leave the lockdown - this lets the potentially waiting hook continue execution.
+		LeaveLockdown();
+
+		// Enter another lockdown right away - wait for the newly entered thread to leave.
+		EnterLockdown();
+
+		// Now we can actually remove the hook fully.
+		auto last_status = Aurie::MmRemoveHook(
 			Aurie::g_ArSelfModule,
 			BuiltinName
 		);
+
+		m_AttachedBuiltins->Remove(gcnew System::String(BuiltinName.c_str()));
+
+		// Leave the lockdown.
+		LeaveLockdown();
+		return last_status;
 	}
 
 	Aurie::AurieStatus Game::EventController::AttachTargetScriptToNSH(
@@ -440,7 +468,12 @@ namespace YYTKInterop
 		if (!AurieSuccess(last_status))
 			return last_status;
 
-		// Create the hook to attach the method to NSH
+		// Enter a lockdown.
+		// We don't want a race to happen in the time it takes us
+		// to add the entry to m_AttachedScripts.
+		EnterLockdown();
+
+		// Create the hook to attach the method to NSH.
 		last_status = Aurie::MmCreateHook(
 			g_ArSelfModule,
 			ScriptName,
@@ -452,19 +485,45 @@ namespace YYTKInterop
 		if (AurieSuccess(last_status))
 			m_AttachedScripts->Add(gcnew System::String(ScriptName.c_str()));
 
+		// Leave the lockdown with everything set up.
+		LeaveLockdown();
+
 		return last_status;
 	}
+
+	// FFS WinAPI headers
+#undef Yield
 
 	Aurie::AurieStatus Game::EventController::DetachTargetScriptFromNSH(
 		std::string ScriptName
 	)
 	{
-		m_AttachedScripts->Remove(gcnew System::String(ScriptName.c_str()));
+		// Enter a lockdown - all hooks must leave.
+		EnterLockdown();
 
-		return Aurie::MmRemoveHook(
+		// Disable the hook. Do not outright remove it here.
+		// This is because a thread may have re-entered after the lockdown was triggered, and is currently waiting for us.
+		//
+		// Disabling the hook is safe, and prevents any new entries from happening.
+		Aurie::MmDisableHook(Aurie::g_ArSelfModule, ScriptName);
+
+		// Leave the lockdown - this lets the potentially waiting hook continue execution.
+		LeaveLockdown();
+
+		// Enter another lockdown right away - wait for the newly entered thread to leave.
+		EnterLockdown();
+
+		// Now we can actually remove the hook fully.
+		auto last_status = Aurie::MmRemoveHook(
 			Aurie::g_ArSelfModule,
 			ScriptName
 		);
+		
+		m_AttachedScripts->Remove(gcnew System::String(ScriptName.c_str()));
+
+		// Leave the lockdown.
+		LeaveLockdown();
+		return last_status;
 	}
 
 	bool Game::EventController::GetOrCreateModScopedPreScriptCallbackDict(
@@ -515,6 +574,7 @@ namespace YYTKInterop
 		System::String^ ScriptName
 	)
 	{
+
 		bool script_in_use = false;
 		for each (auto kv_pair in m_BeforeScriptHandlers)
 		{
@@ -541,6 +601,7 @@ namespace YYTKInterop
 		System::String^ BuiltinName
 	)
 	{
+
 		bool builtin_in_use = false;
 		for each (auto kv_pair in m_BeforeBuiltinHandlers)
 		{
@@ -551,7 +612,7 @@ namespace YYTKInterop
 			}
 		}
 
-		for each (auto kv_pair in m_BeforeBuiltinHandlers)
+		for each (auto kv_pair in m_AfterBuiltinHandlers)
 		{
 			if (kv_pair.Value->ContainsKey(BuiltinName))
 			{
@@ -575,8 +636,28 @@ namespace YYTKInterop
 		System::String^ BuiltinName
 	)
 	{
-		if (!IsScriptHooked(BuiltinName))
-			DetachTargetScriptFromNSH(marshal_as<std::string>(BuiltinName));
+		if (!IsBuiltinHooked(BuiltinName))
+			DetachTargetBuiltinFromNBH(marshal_as<std::string>(BuiltinName));
+	}
+
+	void Game::EventController::Lock()
+	{
+		m_EventControllerLock->Wait();
+	}
+
+	void Game::EventController::Unlock()
+	{
+		m_EventControllerLock->Release();
+	}
+
+	void Game::EventController::EnterLockdown()
+	{
+		m_EventControllerLock->StopNewWaitsAndDrain();
+	}
+
+	void Game::EventController::LeaveLockdown()
+	{
+		m_EventControllerLock->Resume();
 	}
 
 	void Game::EventController::RemoveAllBuiltinHooksForMod(
@@ -770,7 +851,7 @@ namespace YYTKInterop
 			script_list[ScriptName] = new_handler;
 
 		if (script_list->Count == 0)
-			m_BeforeScriptHandlers->Remove(CurrentModule);
+			m_AfterScriptHandlers->Remove(CurrentModule);
 
 		DetachScriptIfUnused(ScriptName);
 	}
@@ -813,13 +894,13 @@ namespace YYTKInterop
 		if (!Aurie::AurieSuccess(last_status))
 			throw gcnew InvalidOperationException("Failed to attach to script!");
 
-		Gen::Dictionary<String^, BeforeBuiltinCallbackHandler^>^ builtin_list = nullptr;
-		if (GetOrCreateModScopedPreBuiltinCallbackDict(CurrentModule, builtin_list))
+		Gen::Dictionary<String^, AfterBuiltinCallbackHandler^>^ builtin_list = nullptr;
+		if (GetOrCreateModScopedPostBuiltinCallbackDict(CurrentModule, builtin_list))
 		{
-			BeforeBuiltinCallbackHandler^ existing_handler = nullptr;
+			AfterBuiltinCallbackHandler^ existing_handler = nullptr;
 			builtin_list->TryGetValue(BuiltinName, existing_handler);
 
-			auto combined = static_cast<BeforeBuiltinCallbackHandler^>(
+			auto combined = static_cast<AfterBuiltinCallbackHandler^>(
 				Delegate::Combine(existing_handler, NotifyHandler)
 				);
 

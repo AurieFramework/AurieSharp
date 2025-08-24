@@ -53,6 +53,11 @@ namespace YYTKInterop
 		InitializeFromRValue(YYTK::RValue(Value));
 	}
 
+	GameVariable::GameVariable(float Value)
+	{
+		InitializeFromRValue(YYTK::RValue(Value));
+	}
+
 	GameVariable::GameVariable(GameObject^ Value)
 	{
 		InitializeFromRValue(YYTK::RValue(Value->m_Object));
@@ -69,7 +74,17 @@ namespace YYTKInterop
 		InitializeFromRValue(YYTK::RValue(marshal_as<std::string>(Value).c_str()));
 	}
 
+	GameVariable::operator GameVariable ^ (double Value)
+	{
+		return gcnew GameVariable(Value);
+	}
+
 	GameVariable::operator GameVariable ^ (bool Value)
+	{
+		return gcnew GameVariable(Value);
+	}
+
+	GameVariable::operator GameVariable ^ (float Value)
 	{
 		return gcnew GameVariable(Value);
 	}

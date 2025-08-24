@@ -194,6 +194,7 @@
     <ClInclude Include="include\ZenHv\ZenHv.hpp" />
     <ClInclude Include="include\Zydis\Zydis.h" />
     <ClInclude Include="source\Managed\Aurie\IAurie.hpp" />
+    <ClInclude Include="source\Managed\DrainLock.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Interface\Interface.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Objects\GameInstance.hpp" />
     <ClInclude Include="source\Managed\YYToolkit\Objects\GameObject.hpp" />

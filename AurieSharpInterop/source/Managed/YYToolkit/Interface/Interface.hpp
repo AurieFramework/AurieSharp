@@ -6,6 +6,7 @@
 #include "../Variable/GameVariable.hpp"
 #include "../Objects/GameRoom.hpp"
 #include "../../Aurie/IAurie.hpp"
+#include "../../DrainLock.hpp"
 
 namespace YYTKInterop
 {
@@ -238,6 +239,8 @@ namespace YYTKInterop
 			Gen::List<System::String^>^ m_AttachedScripts;
 			Gen::List<System::String^>^ m_AttachedBuiltins;
 
+			DrainableMutex^ m_EventControllerLock;
+
 			_BeforeScriptDict^ m_BeforeScriptHandlers;
 			_AfterScriptDict^ m_AfterScriptHandlers;
 			_BeforeBuiltinDict^ m_BeforeBuiltinHandlers;
@@ -245,6 +248,8 @@ namespace YYTKInterop
 
 			EventController() 
 			{
+				m_EventControllerLock = gcnew DrainableMutex();
+
 				m_BeforeScriptHandlers = gcnew _BeforeScriptDict(4);
 				m_AfterScriptHandlers = gcnew _AfterScriptDict(4);
 
@@ -357,6 +362,17 @@ namespace YYTKInterop
 			);
 
 		public:
+			// Lock without the need for exclusive access
+			void Lock();
+			// Unlock what you locked.
+			void Unlock();
+
+			// Lock with exclusive access. All Lock() calls block.
+			void EnterLockdown();
+
+			// Unlock exclusive access.
+			void LeaveLockdown();
+
 			void RemoveAllBuiltinHooksForMod(
 				AurieSharpInterop::AurieManagedModule^ Module
 			);

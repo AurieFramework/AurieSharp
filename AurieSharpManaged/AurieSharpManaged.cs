@@ -110,10 +110,6 @@ namespace AurieSharpManaged
 
         private static void OnModDirectoryFileDelete(object sender, FileSystemEventArgs e)
         {
-            // Skip ourselves (AurieSharpManaged)
-            if (IsAssemblyASM(e.FullPath))
-                return;
-
             GC.Collect();
 
             ManagedMod? changed_mod = m_LoadedMods.Find((mod) => { return Path.GetFullPath(mod.Path) == e.FullPath; });

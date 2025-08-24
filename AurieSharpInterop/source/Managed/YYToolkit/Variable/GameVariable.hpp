@@ -29,8 +29,11 @@ namespace YYTKInterop
 		// Creates a VALUE_INT64 RValue
 		GameVariable(System::Int64 Value);
 
-		// Create a VALUE_REAL RValue
+		// Creates a VALUE_REAL RValue
 		GameVariable(double Value);
+
+		// Creates a VALUE_REAL RValue
+		GameVariable(float Value);
 
 		// Creates a VALUE_OBJECT RValue
 		GameVariable(GameObject^ Value);
@@ -40,7 +43,9 @@ namespace YYTKInterop
 		GameVariable(System::String^ Value);
 
 		// Implicit conversions such that C# can do GameVariable var = "string" for example
+		static operator GameVariable ^ (double Value);
 		static operator GameVariable ^ (bool Value);
+		static operator GameVariable ^ (float Value);
 		static operator GameVariable ^ (System::Int32 Value);
 		static operator GameVariable ^ (System::Int64 Value);
 		static operator GameVariable ^ (GameObject^ Value);

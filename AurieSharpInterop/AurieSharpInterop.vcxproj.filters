@@ -95,6 +95,9 @@
     <ClInclude Include="include\ZenHv\ZenHv.hpp">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>
+    <ClInclude Include="source\Managed\DrainLock.hpp">
+      <Filter>Hlavičkové soubory</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="source\Managed\YYToolkit\Native Hooks\NativeHookEntry.asm">

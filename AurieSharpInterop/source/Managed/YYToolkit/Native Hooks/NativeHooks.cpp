@@ -4,6 +4,7 @@
 #include <MemoryUtils/MemoryUtils.hpp>
 #include <ZenHv/ZenHv.hpp>
 #include <msclr/marshal_cppstd.h>
+#include <msclr/lock.h>
 
 using namespace msclr::interop;
 
@@ -75,27 +76,16 @@ std::string GetCurrentHookName(
 		// Convert to an unmanaged string
 		std::string hook_name = marshal_as<std::string>(script);
 
-		// Get the current hook
-		AurieObject* object = Internal::MmpGetHookByName(
+		ProcessorContext context = {};
+		auto last_status = MmGetRegistersForHook(
 			g_ArSelfModule,
-			hook_name
+			hook_name,
+			context
 		);
 
-		// Check the object type for the hook - I think it's safe to assume 
-		// that it's an RP hook since ASI doesn't do any other hooks, but still, better to be safe.
-		if (Internal::ObpGetObjectType(object) != AURIE_OBJECT_RP_HOOK)
+		if (!AurieSuccess(last_status))
 		{
-			continue;
-		}
-
-		// Get the captured registers for our hook
-		ProcessorContext context = {};
-		auto script_hook = reinterpret_cast<AurieRpHook*>(object);
-		if (!AurieSuccess(Internal::MmpGetRegistersForRPHook(
-			script_hook,
-			context
-		)))
-		{
+			DbgPrintEx(LOG_SEVERITY_ERROR, "[ASI] Failed to get preserved registers for hook %s - code %s", hook_name.c_str(), AurieStatusToString(last_status));
 			continue;
 		}
 
@@ -125,6 +115,40 @@ std::string GetCurrentHookName(
 		"[ASI] No hook matches current processor state!"
 	);
 
+	for each(auto script in HookList)
+	{
+		std::string hook_name = marshal_as<std::string>(script);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "- %s", hook_name.c_str());
+
+		ProcessorContext context = {};
+		auto last_status = MmGetRegistersForHook(
+			g_ArSelfModule,
+			hook_name,
+			context
+		);
+
+		if (!AurieSuccess(last_status))
+		{
+			DbgPrintEx(LOG_SEVERITY_ERROR, "[ASI] Failed to get preserved registers for hook %s - code %s", hook_name.c_str(), AurieStatusToString(last_status));
+			continue;
+		}
+
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - rax=%016llx rbx=%016llx rcx=%016llx", context.RAX, context.RBX, context.RCX);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - rdx=%016llx rsi=%016llx rdi=%016llx", context.RDX, context.RSI, context.RDI);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - rip=%016llx rsp=%016llx rbp=%016llx", context.RIP, context.RSP, context.RBP);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - r8=%016llx r9=%016llx r10=%016llx", context.R8, context.R9, context.R10);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - r11=%016llx r12=%016llx r13=%016llx", context.R11, context.R12, context.R13);
+		DbgPrintEx(LOG_SEVERITY_TRACE, "  - r14=%016llx r15=%016llx tsp=%016llx", context.R14, context.R15, context.TrampolineRSP);
+	}
+
+	DbgPrintEx(LOG_SEVERITY_TRACE, "Recorded registers: ");
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- rax=%016llx rbx=%016llx rcx=%016llx", g_RegisterState.RAX, g_RegisterState.RBX, g_RegisterState.RCX);
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- rdx=%016llx rsi=%016llx rdi=%016llx", g_RegisterState.RDX, g_RegisterState.RSI, g_RegisterState.RDI);
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- rip=%016llx rsp=%016llx rbp=%016llx", g_RegisterState.RIP, g_RegisterState.RSP, g_RegisterState.RBP);
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- r8=%016llx r9=%016llx r10=%016llx", g_RegisterState.R8, g_RegisterState.R9, g_RegisterState.R10);
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- r11=%016llx r12=%016llx r13=%016llx", g_RegisterState.R11, g_RegisterState.R12, g_RegisterState.R13);
+	DbgPrintEx(LOG_SEVERITY_TRACE, "- r14=%016llx r15=%016llx", g_RegisterState.R14, g_RegisterState.R15);
+
 	YYTK::GetInterface()->GetRunnerInterface().YYError("[ASI] Failed to find correct hook.");
 	return "";
 }
@@ -139,6 +163,16 @@ std::string GetCurrentHookNameBuiltin()
 	return GetCurrentHookName(YYTKInterop::Game::Events->m_AttachedBuiltins);
 }
 
+void LockEventsMutex()
+{
+	YYTKInterop::Game::Events->Lock();
+}
+
+void UnlockEventsMutex()
+{
+	YYTKInterop::Game::Events->Unlock();
+}
+
 #pragma unmanaged
 
 extern "C" void YYTKInterop::NativeBuiltinHook(
@@ -149,6 +183,8 @@ extern "C" void YYTKInterop::NativeBuiltinHook(
 	OPTIONAL IN YYTK::RValue* Arguments
 )
 {
+	LockEventsMutex();
+
 	std::string hook_name = GetCurrentHookNameBuiltin();
 	auto original = reinterpret_cast<YYTK::TRoutine>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name));
 
@@ -157,11 +193,15 @@ extern "C" void YYTKInterop::NativeBuiltinHook(
 	RaiseManagedBeforeBuiltinEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments, was_builtin_cancelled);
 
 	if (was_builtin_cancelled)
+	{
+		UnlockEventsMutex();
 		return;
+	}
 
 	original(Result, Self, Other, ArgumentCount, Arguments);
 
 	RaiseManagedAfterBuiltinEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments);
+	UnlockEventsMutex();
 }
 
 extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
@@ -172,6 +212,8 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 	IN YYTK::RValue** Arguments
 )
 {
+	LockEventsMutex();
+
 	std::string hook_name = GetCurrentHookNameScript();
 	auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(Aurie::g_ArSelfModule, hook_name));
 
@@ -180,11 +222,15 @@ extern "C" YYTK::RValue& YYTKInterop::NativeScriptHook(
 	RaiseManagedBeforeScriptEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments, was_script_cancelled);
 
 	if (was_script_cancelled)
+	{
+		UnlockEventsMutex();
 		return Result;
+	}
 
 	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	RaiseManagedAfterScriptEvent(hook_name, Result, Self, Other, ArgumentCount, Arguments);
 
+	UnlockEventsMutex();
 	return Result;
 }
