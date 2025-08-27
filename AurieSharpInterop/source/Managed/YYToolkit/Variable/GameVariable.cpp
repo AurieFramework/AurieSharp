@@ -5,22 +5,24 @@ using namespace msclr::interop;
 
 namespace YYTKInterop
 {
+	GameVariable::GameVariable(std::nullptr_t)
+	{
+		this->m_Value = nullptr;
+	}
+
 	GameVariable^ GameVariable::CreateFromRValue(const YYTK::RValue& Value)
 	{
-		GameVariable^ variable = gcnew GameVariable();
-		variable->InitializeFromRValue(Value);
+		// Create an uninitialized object.
+		GameVariable^ variable = gcnew GameVariable(nullptr);
 
+		variable->InitializeFromRValue(Value);
 		return variable;
 	}
 
 	void GameVariable::InitializeFromRValue(const YYTK::RValue& Value)
 	{
-		this->m_Value = static_cast<YYTK::RValue*>(Aurie::MmAllocateMemory(Aurie::g_ArSelfModule, sizeof(YYTK::RValue)));
-
-		if (!this->m_Value)
-			throw gcnew System::OutOfMemoryException("Failed to allocate RValue memory!");
-		
-		*m_Value = Value;
+		System::Diagnostics::Debug::Assert(this->m_Value == nullptr, gcnew System::String("Overwriting an already initialized RValue"));
+		this->m_Value = new YYTK::RValue(Value);
 	}
 
 	YYTK::RValue& GameVariable::ToRValue()
@@ -71,7 +73,7 @@ namespace YYTKInterop
 	GameVariable::GameVariable(System::String^ Value)
 	{
 		// Note: This is okay, since YYCreateString (RV_CreateFromString internals) copy it to a GM-owned buffer.
-		InitializeFromRValue(YYTK::RValue(marshal_as<std::string>(Value).c_str()));
+		InitializeFromRValue(YYTK::RValue(marshal_as<std::string>(Value)));
 	}
 
 	GameVariable::operator GameVariable ^ (double Value)
@@ -313,7 +315,7 @@ namespace YYTKInterop
 		if (!m_Value->IsString() &&
 			!m_Value->IsNumberConvertible() &&
 			!m_Value->IsStruct() &&
-			!m_Value->ToArray() &&
+			!m_Value->IsArray() &&
 			!m_Value->IsUndefined() &&
 			m_Value->m_Kind != YYTK::VALUE_REF
 		)
@@ -343,11 +345,14 @@ namespace YYTKInterop
 	GameVariable::~GameVariable()
 	{
 		this->!GameVariable();
+		System::GC::SuppressFinalize(this);
 	}
 
 	GameVariable::!GameVariable()
 	{
-		if (this->m_Value) Aurie::MmFreeMemory(Aurie::g_ArSelfModule, this->m_Value);
+		if (this->m_Value)
+			delete this->m_Value;
+
 		this->m_Value = nullptr;
 	}
 

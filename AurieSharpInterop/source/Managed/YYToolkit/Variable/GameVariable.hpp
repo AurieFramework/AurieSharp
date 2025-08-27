@@ -11,6 +11,9 @@ namespace YYTKInterop
 	{
 	internal:
 		YYTK::RValue* m_Value;
+		
+		// Initializer for creating uninitialized GameVariable objects.
+		GameVariable(std::nullptr_t);
 
 		static GameVariable^ CreateFromRValue(const YYTK::RValue& Value);
 
