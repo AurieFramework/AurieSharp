@@ -58,7 +58,7 @@ namespace AurieSharpManaged
         }
         public AurieStatus Load()
         {
-            using var fs = File.Open(m_Path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+            using var fs = File.Open(m_Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             m_LoadContext = new($"ASMContext_{m_Path}", true);
             m_LoadAssembly = m_LoadContext.LoadFromStream(fs);
 

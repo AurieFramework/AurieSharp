@@ -18,7 +18,7 @@ namespace AurieSharpManaged
             FileStream fs;
             try
             {
-                fs = File.Open(AssemblyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+                fs = File.Open(AssemblyPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             }
             catch (Exception ex)
             {
