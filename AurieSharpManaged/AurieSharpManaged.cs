@@ -69,13 +69,17 @@ namespace AurieSharpManaged
                 Framework.PrintEx(AurieLogSeverity.Info, $"[ASM] Loading mod {e.Name}...");
                 ManagedMod created_mod = new(e.FullPath);
 
-                last_status = created_mod.Load();
+                if (!CheckDependenciesResolvable(created_mod))
+                {
+                    Framework.PrintEx(AurieLogSeverity.Error, $"[ASM] Failed to load {e.Name} - missing dependencies.");
+                    return;
+                }
+
+                last_status = created_mod.Load(m_LoadedMods);
                 if (last_status != AurieStatus.Success)
                 {
                     Framework.PrintEx(AurieLogSeverity.Error, $"[ASM] Failed to load {e.Name} with status {last_status.ToString()}");
-                    created_mod.Unload(false);
-
-                    GC.Collect();
+                    UnloadMod(created_mod, false);
                     return;
                 }
 
@@ -86,15 +90,19 @@ namespace AurieSharpManaged
             Framework.PrintEx(AurieLogSeverity.Info, $"[ASM] Hot-reloading mod {e.Name}");
 
             // Otherwise, the mod is already loaded, and just needs to be unloaded.
+            UnloadMod(changed_mod, true);
             changed_mod.Unload(true);
-            m_LoadedMods.Remove(changed_mod);
             changed_mod = null;
-
-            // Collect the old mod (this frees the memory occuppied by it)
-            GC.Collect();
 
             // Create a new one
             ManagedMod hotreloaded_mod = new(e.FullPath);
+
+            if (!CheckDependenciesResolvable(hotreloaded_mod))
+            {
+                Framework.PrintEx(AurieLogSeverity.Error, $"[ASM] Failed to load {e.Name} - missing dependencies.");
+                return;
+            }
+
             last_status = hotreloaded_mod.Load();
 
             // .Load() automatically cleans up if it fails loading
@@ -120,14 +128,48 @@ namespace AurieSharpManaged
                 if (changed_mod is null)
                     return;
 
-                changed_mod.Unload(true);
+                UnloadMod(changed_mod, true);
                 Framework.PrintEx(AurieLogSeverity.Info, $"[ASM] Unloading mod {e.Name}");
-
-                m_LoadedMods.Remove(changed_mod);
-                GC.Collect();
-
                 return;
             }
+        }
+
+        private static void UnloadMod(ManagedMod mod, bool notify)
+        {
+            // If there are mods that depend on this mod, unload them first (recursively).
+            foreach (ManagedMod dep in m_LoadedMods)
+            {
+                if (dep.Dependencies == null)
+                {
+                    continue;
+                }
+                if (dep.Dependencies.Select(d => d.FullName).Contains(mod.AssemblyName!.FullName))
+                {
+                    UnloadMod(dep, notify);
+                }
+            }
+            mod.Unload(notify);
+            m_LoadedMods.Remove(mod);
+            GC.Collect();
+        }
+
+        private static bool CheckDependenciesResolvable(ManagedMod mod, List<ManagedMod>? potential_mods = null)
+        {
+            potential_mods ??= [];
+            List<AssemblyName> missingDeps = mod.Dependencies!.Where(
+                dependency =>
+                !m_LoadedMods.Select(i => i.AssemblyName!.FullName).Contains(dependency.FullName)
+                && !potential_mods.Select(i => i.AssemblyName!.FullName).Contains(dependency.FullName)).ToList();
+            if (missingDeps.Count > 0)
+            {
+                Framework.PrintEx(
+                    AurieLogSeverity.Error,
+                    $"[ASM] Assembly \"{mod.Path}\" could not be loaded - missing dependencies: {missingDeps.Select(d => d.Name!).Aggregate((a, b) => $"{a} | {b}").ToString()}"
+                    );
+                return false;
+            }
+
+            return true;
         }
 
         [UnmanagedCallersOnly]
@@ -135,6 +177,7 @@ namespace AurieSharpManaged
         {
             string mod_folder = Path.Combine(Framework.GetGameDirectory(), "mods", "Managed");
             Framework.PrintEx(AurieLogSeverity.Trace, $"[ASM] Proceeding to load from {mod_folder}");
+            List<ManagedMod> potential_mods = new();
             foreach (string file in Directory.GetFiles(mod_folder))
             {
                 // Get the file extension, including the ending dot.
@@ -151,27 +194,50 @@ namespace AurieSharpManaged
                 // Create a new mod entry
                 ManagedMod new_mod = new(file);
 
-                // Try to actually load the mod
-                AurieStatus load_status = new_mod.Load();
+                potential_mods.Add(new_mod);
+            }
 
-                // .Load() automatically cleans up if it fails loading
-                if (load_status != AurieStatus.Success)
+            //Check if we are missing any dependencies
+
+            //Resolve mod load order for dependencies
+            while (potential_mods.Count > 0)
+            {
+                foreach (ManagedMod mod in potential_mods.ToList())
                 {
-                    Framework.PrintEx(
-                        AurieLogSeverity.Error,
-                        $"[ASM] Assembly \"{file}\" could not be loaded - {load_status.ToString()}!"
-                    );
+                    if (!CheckDependenciesResolvable(mod, potential_mods))
+                    {
+                        // If there are any dependencies missing from both resolved and potential mods, we cannot load this mod at all.
+                        potential_mods.Remove(mod);
+                        continue;
+                    }
 
-                    continue;
+                    //If the mod has no dependencies, or all dependencies are already resolved, we can load it.
+                    if (mod.Dependencies == null
+                        || mod.Dependencies.Count == 0
+                        || mod.Dependencies.Select(m => m.FullName).Intersect(m_LoadedMods.Select(i => i.AssemblyName!.FullName)).Count() == mod.Dependencies.Count)
+                    {
+                        potential_mods.Remove(mod);
+                        // Try to actually load the mod
+                        AurieStatus load_status = mod.Load(m_LoadedMods);
+
+                        // .Load() automatically cleans up if it fails loading
+                        if (load_status != AurieStatus.Success)
+                        {
+                            Framework.PrintEx(
+                                AurieLogSeverity.Error,
+                                $"[ASM] Assembly \"{mod.Path}\" could not be loaded - {load_status.ToString()}!"
+                            );
+
+                            continue;
+                        }
+                        m_LoadedMods.Add(mod);
+                        Framework.PrintEx(
+                            AurieLogSeverity.Trace,
+                            $"[ASM] Loaded file \"{mod}\"."
+                            );
+                    }
                 }
 
-                // Add the mod to our list of loaded modles
-                m_LoadedMods.Add(new_mod);
-
-                Framework.PrintEx(
-                    AurieLogSeverity.Trace,
-                    $"[ASM] Loaded file \"{file}\"."
-                );
             }
 
             m_FsWatcher.Path = mod_folder;

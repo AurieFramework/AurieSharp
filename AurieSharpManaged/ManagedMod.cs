@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Text.RegularExpressions;
 using System.Windows.Markup;
 using YYTKInterop;
 
@@ -9,13 +10,16 @@ namespace AurieSharpManaged
 {
     internal class ManagedMod
     {
+        private const string ignoredAssemblies = "^(System\\..*|auriesharpinterop)";
         private AssemblyLoadContext? m_LoadContext;
         private Assembly? m_LoadAssembly;
         private AurieManagedModule m_ManagedModule;
 
         private string m_Path;
         private bool m_Loaded;
-        
+        private AssemblyName? m_AssemblyName;
+        private List<AssemblyName>? m_Dependencies;
+
         private MethodInfo? LocateMethod(string Name, BindingFlags Flags, Func<MethodInfo, bool> ValidationMethod)
         {
             if (m_LoadAssembly is null)
@@ -45,6 +49,7 @@ namespace AurieSharpManaged
             return null;
         }
 
+
         public ManagedMod(string ModPath)
         {
             m_Path = ModPath;
@@ -52,17 +57,22 @@ namespace AurieSharpManaged
             m_LoadAssembly = null;
             m_Loaded = false;
             m_ManagedModule = new();
-            
+
             if (!File.Exists(m_Path))
                 throw new FileNotFoundException("Attempted to create mod with non-existent file", ModPath);
-        }
-        public AurieStatus Load()
-        {
-            using var fs = File.Open(m_Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            m_LoadContext = new($"ASMContext_{m_Path}", true);
-            m_LoadAssembly = m_LoadContext.LoadFromStream(fs);
 
-            MethodInfo? initialize_method = LocateMethod("InitializeMod", BindingFlags.Static | BindingFlags.Public, (PotentialMethod) => 
+            AnalyzeAssembly();
+        }
+
+        public AurieStatus Load(List<ManagedMod>? loadedMods = null)
+        {
+            using (var fs = File.Open(m_Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                m_LoadContext = new ManagedModAssemblyLoadContext($"ASMContext_{m_Path}", loadedMods?.Select(m => m.m_LoadAssembly!).ToList());
+                m_LoadAssembly = m_LoadContext.LoadFromStream(fs);
+            }
+
+            MethodInfo? initialize_method = LocateMethod("InitializeMod", BindingFlags.Static | BindingFlags.Public, (PotentialMethod) =>
             {
                 // InitializeMod should return AurieStatus.
                 if (PotentialMethod.ReturnType != typeof(AurieStatus))
@@ -236,7 +246,59 @@ namespace AurieSharpManaged
             return AurieStatus.Success;
         }
 
+        private void AnalyzeAssembly()
+        {
+            FileStream fs;
+            try
+            {
+                fs = File.Open(m_Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            }
+            catch (Exception ex)
+            {
+                // Return true on exception to not load the mod.
+                Framework.PrintEx(AurieLogSeverity.Warning, $"[ASM] AnalyzeAssembly failed to open assembly {m_Path} - {ex.Message}");
+                throw;
+            }
+
+            AssemblyLoadContext load_context = new("AurieManagedMod AnalyzerContext", true);
+            Assembly? assembly = null;
+
+            try
+            {
+                assembly = load_context.LoadFromStream(fs);
+            }
+            catch (Exception ex)
+            {
+                // Return true on exception to not load the mod.
+                Framework.PrintEx(AurieLogSeverity.Warning, $"[ASM] AnalyzeAssembly failed to load managed assembly {m_Path} - {ex.Message}");
+                throw;
+            }
+            m_AssemblyName = assembly.GetName();
+            FindDependencies(assembly);
+
+            load_context.Unload();
+
+            GC.Collect();
+        }
+
         public string Path { get { return m_Path; } }
         public bool Loaded { get { return m_Loaded; } }
+
+        internal AssemblyName? AssemblyName { get { return m_AssemblyName; } }
+
+        internal List<AssemblyName>? Dependencies { get { return m_Dependencies; } }
+
+        private void FindDependencies(Assembly assembly)
+        {
+            m_Dependencies = new List<AssemblyName>();
+            foreach (var reference in assembly.GetReferencedAssemblies())
+            {
+                // Ignore system assemblies and AurieSharpInterop
+                if (!Regex.Match(reference.Name!, ignoredAssemblies, RegexOptions.IgnoreCase | RegexOptions.Multiline).Success)
+                {
+                    m_Dependencies.Add(reference);
+                }
+            }
+        }
     }
 }
